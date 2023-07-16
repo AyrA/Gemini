@@ -1,0 +1,20 @@
+﻿@{
+    ViewData["Title"] = "Home";
+}
+<h1>Gemini server browser</h1>
+<div class="alert alert-danger d-none">
+    You do not appear to have any identities.
+    Consider adding at least one, or you will not be able to browse gemini sites that require you to authenticate.
+</div>
+<p>
+    <a asp-action="Browse" class="btn btn-link">Begin browsing</a>
+</p>
+<p>
+    <a asp-action="Identity" class="btn btn-link">Manage identities</a>
+</p>
+<p>
+    <a asp-action="Trust" class="btn btn-link">Manage trusted certificates</a>
+</p>
+@section Scripts {
+    <script src="~/js/index.js" defer asp-append-version="true"></script>
+}

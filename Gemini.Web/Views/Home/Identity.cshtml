@@ -1,0 +1,20 @@
+﻿@{
+    ViewData["Title"] = "Manage identities";
+}
+<h1>@ViewData["Title"]</h1>
+<p>
+    Here you can manage your identities.
+    These can be used to authenticate yourself against gemini servers,
+    should they want to authenticate you.<br />
+    How many identities you create is up to you.
+    You can have just one you use for all services,
+    or you can create a distinct identity for every individual service.
+</p>
+
+<table id="tblCert">
+
+</table>
+
+@section Scripts{
+    <script src="~/js/identity.js" defer asp-append-version="true"></script>
+}

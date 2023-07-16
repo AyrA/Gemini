@@ -1,0 +1,24 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+<form id="form" asp-controller="Gemini" asp-action="Navigate">
+    <div class="row">
+        <div class="col-md-6 mb-2">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <input type="button" class="btn btn-secondary" id="btnBack" value="Back" />
+                </div>
+                <input type="url" class="form-control" required name="url"
+                       placeholder="gemini://" value="gemini://geminispace.info/"
+                       pattern="gemini:\/\/.+" />
+                <div class="input-group-append">
+                    <input type="submit" class="btn btn-primary" value="Go" />
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+<div id="gemini"><h1>Ready</h1></div>
+@section Scripts{
+    <script src="~/js/browse.js" defer></script>
+}

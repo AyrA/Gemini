@@ -1,0 +1,37 @@
+﻿@{
+    ViewData["Title"] = "Manage trusted certificates";
+}
+<h1>Manage trusted certificates</h1>
+<p>
+    On here you can manually add and remove certificates from the trust store.
+    You usually don't have to add certificates manually, the gemini browser will prompt you
+    when an unknown certificate is encountered.
+</p>
+<table id="tblTrust" class="table">
+    <thead>
+        <tr>
+            <th>Server</th>
+            <th>Key id</th>
+            <th>Trusted at</th>
+            <th>Expires</th>
+            <th>Options</th>
+        </tr>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+<template id="addCertTemplate">
+    <div class="mb-2">
+        Server<br />
+        <input type="text" name="Host" placeholder="Host[:Port]" required
+               pattern="[^:]+(:\d+)?" title="Host name only, or host:port combination." /><br />
+        <i>If not provided, port 1965 will be used</i>
+    </div>
+    <div class="mb-2">
+        Certificate file<br />
+        <input type="file" name="Certificate" required accept=".cer,.crt,.pem" />
+    </div>
+</template>
+@section Scripts{
+    <script src="~/js/trust.js" asp-append-version="true"></script>
+}

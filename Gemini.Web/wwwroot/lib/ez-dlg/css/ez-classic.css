@@ -1,0 +1,102 @@
+/*
+	Windows(r) classic theme.
+	An example style set to simulate classic Windows(r) dialog layout and behavior.
+	This merely serves as an example and is in no way a perfect reproduction.
+	
+	Licensed under MIT.
+	Windows is a registered trademark of the Microsoft Corporation.
+*/
+
+/*
+	Dialog backdrop
+	Note that this is a virtual element.
+	You cannot use "querySelector('.ez-dialog::backdrop')" to select this in the DOM.
+	Handlers on the dialog box itself (such as "click") are extended to this element too.
+*/
+
+.ez-dialog::backdrop{
+	background-color:#808080;
+	opacity:0.5;
+}
+
+/*
+	Dialog window
+	This is where you apply the base styles for the dialog such as
+	fonts, background color, and border style as well as margin and padding.
+	The dialog is centered by default, but you can use the "position" rule to change this if you want to.
+*/
+
+.ez-dialog{
+	/*
+		Windows specific fonts are not going t work on other systems,
+		so consider using alternatives
+	*/
+	font-family:Tahoma,'MS Sans Serif',Sans-Serif;
+	border:2px solid #404040;
+	border-top:2px solid #FFF;
+	border-left:2px solid #FFF;
+	background-color:#D4D0C8;
+	color:#000;
+	padding:0;
+}
+
+/*
+	Dialog body
+	This is the section between the dialog title and the buttons
+*/
+
+.ez-dialog > form > div{
+	margin:1em;
+	font-size:12pt;
+}
+
+/*
+	Title
+	The title of the dialog
+*/
+
+.ez-dialog > h1{
+	/*Gradient from dark blue to light blue, left to right.*/
+	background:linear-gradient(.25turn, #0A246A, 50%, #A6CAF0);
+	color:#FFF;
+	margin:0;
+	padding:2px;
+	font-size:12pt;
+	font-weight:bold;
+}
+
+/*
+	Button area
+	This is the element that contains all the dialog box buttons
+*/
+
+.ez-dialog > form > menu{
+	padding-right:1em;
+	text-align:right;
+}
+
+/*
+	Buttons
+	Styles for individual dialog box buttons
+*/
+
+.ez-dialog > form > menu > button{
+	margin:0.25em;
+	border:2px solid #404040;
+	border-top:2px solid #FFF;
+	border-left:2px solid #FFF;
+	border-radius:0px;
+	background-color:#D4D0C8;
+	font-size:12pt;
+}
+
+/*
+	Styles for active buttons.
+	Active means that the button is being held down.
+*/
+.ez-dialog > form > menu > button:active{
+	/*Change border colors to get a 3D button pressed style*/
+	border:2px solid #FFF;
+	border-top:2px solid #404040;
+	border-left:2px solid #404040;
+}
