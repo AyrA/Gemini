@@ -32,10 +32,50 @@ namespace Gemini.Web.Controllers
         }
 
         /// <summary>
+        /// Changes the password of a certificate.
+        /// </summary>
+        /// <param name="id">Certificate id</param>
+        /// <param name="currentPassword">Current password</param>
+        /// <param name="newPassword">New password</param>
+        /// <returns>Certificate info</returns>
+        /// <remarks>
+        /// This function is also used to add or remove the password.
+        /// Encryption is added by sending an empty <paramref name="currentPassword"/> and a non-empty
+        /// <paramref name="newPassword"/>.
+        /// Likewise, encryption is removed by setting <paramref name="currentPassword"/> and leaving
+        /// <paramref name="newPassword"/> empty.
+        /// </remarks>
+        [HttpPost, Produces("application/json", Type = typeof(CertificateInfo))]
+        public IActionResult ChangePassword(string id,
+            [FromForm] string? currentPassword,
+            [FromForm] string? newPassword)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                return BadRequest($"'{nameof(id)}' cannot be null or empty.");
+            }
+            if (string.IsNullOrEmpty(currentPassword) && string.IsNullOrEmpty(newPassword))
+            {
+                return BadRequest("Old and new password are identical");
+            }
+            currentPassword ??= string.Empty;
+            newPassword ??= string.Empty;
+
+            if (currentPassword == newPassword)
+            {
+                return BadRequest("Old and new password are identical");
+            }
+            return Json(_certificateProvider.UpdatePassword(id, currentPassword, newPassword));
+        }
+
+        /// <summary>
         /// Gets the information of a single certificate
         /// </summary>
         /// <param name="id">Certificate id</param>
         /// <returns>Certificate</returns>
+        /// <remarks>
+        /// To get the certificate data itself, use <see cref="CertificateExport(string)"/> function instead
+        /// </remarks>
         [HttpGet, ActionName("Certificate"), Produces("application/json", Type = typeof(CertificateInfo))]
         public IActionResult CertificateGet(string id)
         {
@@ -65,7 +105,10 @@ namespace Gemini.Web.Controllers
         /// Creates a new certificate
         /// </summary>
         /// <param name="displayName">Certificate name (also shown to remote servers)</param>
-        /// <param name="password">Optional private key password. Recommended</param>
+        /// <param name="password">
+        /// Optional private key password.
+        /// If not specified, the key is stored unencrypted (not recommended)
+        /// </param>
         /// <param name="expiration">Expiration date</param>
         /// <returns>Created certificate resource</returns>
         [HttpPost]
@@ -93,8 +136,12 @@ namespace Gemini.Web.Controllers
         /// Import an existing certificate
         /// </summary>
         /// <param name="certificate">Certificate</param>
-        /// <param name="password">Password</param>
+        /// <param name="password">Password to decrypt <paramref name="certificate"/></param>
         /// <returns>Imported certificate resource</returns>
+        /// <remarks>
+        /// The certificate can either be a PKCS12 file (these usually have PFX extension),
+        /// or a PEM formatted file with both certificate and private key inside
+        /// </remarks>
         [HttpPut]
         [ActionName("Certificate")]
         [Produces("application/json", Type = typeof(CertificateInfo))]
@@ -132,6 +179,11 @@ namespace Gemini.Web.Controllers
         /// </summary>
         /// <param name="id">Certificate id</param>
         /// <returns>true, if deleted or id doesn't exists, false otherwise</returns>
+        /// <remarks>
+        /// Deleting the certificate will irrevocably remove it.
+        /// You will not be able to recreate the certificate, even if you supply the exact same values again.
+        /// If you may need the certificate at a later point in time, export it before deleting it.
+        /// </remarks>
         [HttpDelete, ActionName("Certificate"), Produces("application/json", Type = typeof(bool))]
         public IActionResult CertificateDelete(string id)
         {
@@ -157,7 +209,7 @@ namespace Gemini.Web.Controllers
         /// It's not actually possible to change these values.
         /// What this does is it creates a new certificate using the existing private key,
         /// then it deletes the old certificate.
-        /// A server that identifies the client by key will continue to correctly identify this new certificate.
+        /// A server that identifies the client with the key will continue to correctly identify this new certificate.
         /// A server that uses the thumbprint (which is incorrect to do so)
         /// will no longer recognize the certificate.
         /// </remarks>
@@ -188,6 +240,11 @@ namespace Gemini.Web.Controllers
         /// </summary>
         /// <param name="id">Certificate id</param>
         /// <returns>Certificate PEM data</returns>
+        /// <remarks>
+        /// Whether the export will be encrypted or not
+        /// depends on whether the certificate is currently encrypted or not.
+        /// Use <see cref="ChangePassword"/> to change encryption.
+        /// </remarks>
         [HttpGet, Produces("text/plain")]
         public IActionResult CertificateExport(string id)
         {

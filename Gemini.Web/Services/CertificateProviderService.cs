@@ -66,8 +66,7 @@ namespace Gemini.Web.Services
             {
                 _issuedInstances.Add(ci);
             }
-            var p = Path.Combine(certDir, ci.Id + ".pem");
-            ci.Save(p, password);
+            SaveCertificate(ci, password);
             return ci;
         }
 
@@ -77,10 +76,17 @@ namespace Gemini.Web.Services
             var pOld = Path.Combine(certDir, id + ".pem");
             var ci = new CertificateInfo(pOld, password);
             var newCert = ci.Update(newName, expiration);
-            var pNew = Path.Combine(certDir, ci.Id + ".pem");
-            newCert.Save(pNew, password);
+            SaveCertificate(newCert, password);
             DeleteCertificate(id);
             return newCert;
+        }
+
+        public CertificateInfo UpdatePassword(string id, string? oldPassword, string? newPassword)
+        {
+            CheckId(id);
+            var ci = GetCertificate(id, oldPassword);
+            SaveCertificate(ci, newPassword);
+            return ci;
         }
 
         public CertificateInfo Import(byte[] certificateData, string password)
@@ -139,8 +145,7 @@ namespace Gemini.Web.Services
             {
                 _issuedInstances.Add(ci);
             }
-            var p = Path.Combine(certDir, ci.Id + ".pem");
-            ci.Save(p, password);
+            SaveCertificate(ci, password);
             return ci;
         }
 
@@ -157,6 +162,13 @@ namespace Gemini.Web.Services
                 //NOOP
             }
             return !File.Exists(p);
+        }
+
+        private void SaveCertificate(CertificateInfo ci, string? password)
+        {
+            var p = Path.Combine(certDir, ci.Id + ".pem");
+            ci.Save(p, password);
+            ci.Encrypted = !string.IsNullOrEmpty(password);
         }
 
         private static void CheckId([NotNull] string? id)

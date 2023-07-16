@@ -12,7 +12,7 @@ namespace Gemini.Web.Models
         public DateTime ValidFrom => _cert.NotBefore.ToUniversalTime();
         public DateTime ValidUntil => _cert.NotAfter.ToUniversalTime();
 
-        public bool Encrypted { get; private set; }
+        public bool Encrypted { get; set; }
 
         private CertificateInfo(X509Certificate2 cert)
         {
@@ -79,7 +79,11 @@ namespace Gemini.Web.Models
         /// <returns>Certificate information structure</returns>
         public static CertificateInfo PublicOnly(string certPath)
         {
-            return new CertificateInfo(X509Certificate2.CreateFromPem(File.ReadAllText(certPath)));
+            var certData = File.ReadAllLines(certPath);
+            return new CertificateInfo(X509Certificate2.CreateFromPem(string.Join("\r\n", certData)))
+            {
+                Encrypted = certData.Any(m => m.Contains("ENCRYPTED PRIVATE KEY"))
+            };
         }
 
         /// <summary>
@@ -157,7 +161,7 @@ namespace Gemini.Web.Models
 
         private static X509Certificate2 GetCert(string name, ECDsa key, DateTime created, DateTime expires)
         {
-            var req = new CertificateRequest($"CN={name},OU=Gemini.Web,O=https://github.com/AyrA/Gemini", key, HashAlgorithmName.SHA256);
+            var req = new CertificateRequest($"CN={name}, OU=Gemini.Web, O=https://github.com/AyrA/Gemini", key, HashAlgorithmName.SHA256);
             return req.CreateSelfSigned(created, expires);
         }
 
