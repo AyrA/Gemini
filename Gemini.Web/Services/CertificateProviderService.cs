@@ -89,27 +89,28 @@ namespace Gemini.Web.Services
             return ci;
         }
 
-        public CertificateInfo Import(byte[] certificateData, string password)
+        public CertificateInfo Import(byte[] certificateData, string? password)
         {
             if (certificateData is null)
             {
                 throw new ArgumentNullException(nameof(certificateData));
             }
 
-            if (string.IsNullOrEmpty(password))
-            {
-                throw new ArgumentException($"'{nameof(password)}' cannot be null or empty.", nameof(password));
-            }
-
             X509Certificate2? cert;
 
             if (IsPemCert(certificateData))
             {
+                if (string.IsNullOrEmpty(password) && IsEncryptedPem(certificateData))
+                {
+                    throw new Exception("Supplied PEM certificate contains an encrypted key but no password was supplied.");
+                }
                 //Try PEM import
                 try
                 {
                     var pemData = Encoding.UTF8.GetString(certificateData);
-                    cert = X509Certificate2.CreateFromEncryptedPem(pemData, pemData, password);
+                    cert = string.IsNullOrEmpty(password)
+                        ? X509Certificate2.CreateFromPem(pemData, pemData)
+                        : X509Certificate2.CreateFromEncryptedPem(pemData, pemData, password);
                     if (!cert.HasPrivateKey)
                     {
                         cert.Dispose();
@@ -118,12 +119,23 @@ namespace Gemini.Web.Services
                 }
                 catch (Exception ex)
                 {
-                    throw new CryptographicException("Unable to decode certificate either as pfx/pkcs12 or PEM format", ex);
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        throw new CryptographicException("Unable to decode certificate. Check if the file is a valid PEM formatted certificate", ex);
+                    }
+                    else
+                    {
+                        throw new CryptographicException("Unable to decode certificate using the given password. Check if the file is a valid PEM formatted certificate and key and double check the password.", ex);
+                    }
                 }
             }
             else
             {
                 //Try PKCS12 import
+                if (string.IsNullOrEmpty(password))
+                {
+                    throw new ArgumentException("The certificate is not in PEM format. To attempt a PKCS12 import, the password is mandatory. Due to a limitation of the .NET framework, you cannot import a PKCS12 container without a password. Please either change the password of the container, or convert it to PKCS8 PEM format.", nameof(password));
+                }
                 try
                 {
                     cert = new X509Certificate2(certificateData, password,
@@ -136,7 +148,15 @@ namespace Gemini.Web.Services
                 }
                 catch (Exception ex)
                 {
-                    throw new CryptographicException("Unable to decode certificate as PKCS12", ex);
+                    throw new CryptographicException("Unable to decode certificate as PKCS12. Check that it is a valid PKCS12 formatted file and double check the password", ex);
+                }
+            }
+
+            if (HasCertificate(cert.Thumbprint))
+            {
+                using (cert)
+                {
+                    throw new InvalidOperationException($"A certificate with id {cert.Thumbprint} already exists");
                 }
             }
 
@@ -162,6 +182,12 @@ namespace Gemini.Web.Services
                 //NOOP
             }
             return !File.Exists(p);
+        }
+
+        private bool HasCertificate(string id)
+        {
+            var p = Path.Combine(certDir, id + ".pem");
+            return File.Exists(p);
         }
 
         private void SaveCertificate(CertificateInfo ci, string? password)
@@ -191,6 +217,21 @@ namespace Gemini.Web.Services
             while ((line = sr.ReadLine()) != null)
             {
                 if (Regex.IsMatch(line, @"^\s*-+\s*BEGIN\s+CERTIFICATE\s*-+\s*$", RegexOptions.IgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool IsEncryptedPem(byte[] data)
+        {
+            using var ms = new MemoryStream(data, false);
+            using var sr = new StreamReader(ms, Encoding.Latin1, false);
+            var line = (string?)null;
+            while ((line = sr.ReadLine()) != null)
+            {
+                if (Regex.IsMatch(line, @"^\s*-+\s*BEGIN\s+ENCRYPTED\s+PRIVATE\s+KEY\s*-+\s*$", RegexOptions.IgnoreCase))
                 {
                     return true;
                 }

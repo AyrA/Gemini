@@ -58,6 +58,27 @@
     </div>
 </template>
 
+<template id="importCertTemplate">
+    <h3>
+        Import an existing certificate.
+    </h3>
+    <div class="mb-2">
+        Certificate file<br />
+        <input type="file" name="Certificate" required accept=".cer,.crt,.pem,.p12,.pfx" /><br />
+        <i>
+            The certificate can either be a PKCS12 file (these usually have PFX or P12 extension),
+            or a PEM formatted file with both certificate and private key inside
+        </i>
+    </div>
+    <div class="mb-2">
+        Password<br />
+        <input type="password" autocomplete="off" name="Password" placeholder="Private key password" /><br />
+        <i>
+            If the selected file is password protected, enter it here
+        </i>
+    </div>
+</template>
+
 @section Scripts{
     <script src="~/js/identity.js" defer asp-append-version="true"></script>
     <script src="~/js/mosaic.js" asp-append-version="true"></script>

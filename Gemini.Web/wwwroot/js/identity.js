@@ -20,7 +20,7 @@
                     encrypted: row.appendChild(ce("td")),
                     options: row.appendChild(ce("td"))
                 };
-                cells.name.textContent = cert.friendlyName.match(/CN\s*=([^,]+)/)[1];
+                cells.name.textContent = cert.name;
                 cells.id.title = cert.id;
                 cells.id.appendChild(mosaic(cert.id, 6));
                 cells.id.appendChild(ce("span")).textContent = cert.id.replace(/^(.{6})(.+)(.{6})$/, "$1...$3");
@@ -93,7 +93,7 @@
         const dlgResult = await dlg.confirm([
             "Really delete the certificate " + id + "?",
             "This action cannot be undone. If you think you need the certificate again, consider exporting it first."],
-            "Delete certificate", "Yes", "No");
+            "Delete certificate", "Delete", "Cancel");
         if (dlgResult) {
             const result = await fetch("/Identity/Certificate/" + id, { method: "DELETE" });
             if (result.ok) {
@@ -107,7 +107,31 @@
     }
 
     async function importCert() {
+        const contents = Array.from(q("#importCertTemplate").content.childNodes).map(v => v.cloneNode(true));
+        const btn = [{ text: "OK", value: "y" }, { text: "Cancel", value: "n", isCancel: true }];
+        const dlgResult = await dlg.custom(contents, "Import an identity", btn);
 
+        if (dlgResult === "y") {
+            const div = ce("div");
+            contents.forEach(v => div.appendChild(v));
+            const file = div.querySelector("[name=Certificate]").files[0];
+            const password = div.querySelector("[name=Password]").value;
+
+            const fd = new FormData();
+            fd.append("certificate", file);
+            fd.append("password", password);
+            const result = await fetch("/Identity/Certificate/", {
+                method: "PUT",
+                body: fd
+            });
+            if (result.ok) {
+                await dlg.alert("Your identity was imported", "Identity imported");
+                await loadIdentities();
+            }
+            else {
+                await dlg.alert("The API failed with an error. " + (await result.text()), "API error");
+            }
+        }
     }
 
     async function createCert() {

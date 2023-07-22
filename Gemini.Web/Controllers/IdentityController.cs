@@ -23,11 +23,11 @@ namespace Gemini.Web.Controllers
         /// </summary>
         /// <returns>Certificate list</returns>
         [HttpGet, Produces("application/json"), Route("/[controller]/[action]")]
-        public CertificateInfo[] CertificateList()
+        public CertificateInfoViewModel[] CertificateList()
         {
             return _certificateProvider
                 .GetCertificateNames()
-                .Select(m => _certificateProvider.GetPublicCertificate(m))
+                .Select(m => new CertificateInfoViewModel(_certificateProvider.GetPublicCertificate(m)))
                 .ToArray();
         }
 
@@ -45,10 +45,8 @@ namespace Gemini.Web.Controllers
         /// Likewise, encryption is removed by setting <paramref name="currentPassword"/> and leaving
         /// <paramref name="newPassword"/> empty.
         /// </remarks>
-        [HttpPost, Produces("application/json", Type = typeof(CertificateInfo))]
-        public IActionResult ChangePassword(string id,
-            [FromForm] string? currentPassword,
-            [FromForm] string? newPassword)
+        [HttpPost, Produces("application/json", Type = typeof(CertificateInfoViewModel))]
+        public IActionResult ChangePassword(string id, [FromForm] string? currentPassword, [FromForm] string? newPassword)
         {
             if (string.IsNullOrEmpty(id))
             {
@@ -65,7 +63,7 @@ namespace Gemini.Web.Controllers
             {
                 return BadRequest("Old and new password are identical");
             }
-            return Json(_certificateProvider.UpdatePassword(id, currentPassword, newPassword));
+            return Json(new CertificateInfoViewModel(_certificateProvider.UpdatePassword(id, currentPassword, newPassword)));
         }
 
         /// <summary>
@@ -76,12 +74,12 @@ namespace Gemini.Web.Controllers
         /// <remarks>
         /// To get the certificate data itself, use <see cref="CertificateExport(string)"/> function instead
         /// </remarks>
-        [HttpGet, ActionName("Certificate"), Produces("application/json", Type = typeof(CertificateInfo))]
+        [HttpGet, ActionName("Certificate"), Produces("application/json", Type = typeof(CertificateInfoViewModel))]
         public IActionResult CertificateGet(string id)
         {
             try
             {
-                return Json(_certificateProvider.GetPublicCertificate(id));
+                return Json(new CertificateInfoViewModel(_certificateProvider.GetPublicCertificate(id)));
             }
             catch (FileNotFoundException ex)
             {
@@ -113,14 +111,14 @@ namespace Gemini.Web.Controllers
         /// <returns>Created certificate resource</returns>
         [HttpPost]
         [ActionName("Certificate")]
-        [Produces("application/json", Type = typeof(CertificateInfo))]
+        [Produces("application/json", Type = typeof(CertificateInfoViewModel))]
         [Route("/[controller]/[action]")]
         public IActionResult CertificatePost([FromForm] string displayName, [FromForm] string? password, [FromForm] DateTime expiration)
         {
             var exp = expiration.ToLocalTime().ToUniversalTime().Date;
             try
             {
-                return Json(_certificateProvider.CreateNew(displayName, password, exp));
+                return Json(new CertificateInfoViewModel(_certificateProvider.CreateNew(displayName, password, exp)));
             }
             catch (ArgumentException ex)
             {
@@ -144,33 +142,30 @@ namespace Gemini.Web.Controllers
         /// </remarks>
         [HttpPut]
         [ActionName("Certificate")]
-        [Produces("application/json", Type = typeof(CertificateInfo))]
+        [Produces("application/json", Type = typeof(CertificateInfoViewModel))]
         [Consumes("multipart/form-data")]
         [Route("/[controller]/[action]")]
-        public IActionResult CertificatePut(IFormFile certificate, [FromForm] string password)
+        public IActionResult CertificatePut(IFormFile certificate, [FromForm] string? password)
         {
             if (certificate is null)
             {
                 return BadRequest("No file provided");
             }
-            if (certificate.Length > 1024 * 10)
+            //Full  certificates with private key are usually just a few KB
+            if (certificate.Length > 1024 * 1024)
             {
                 return BadRequest("Certificate too large.");
-            }
-            if (string.IsNullOrEmpty(password))
-            {
-                throw new ArgumentException($"'{nameof(password)}' cannot be null or empty.", nameof(password));
             }
 
             try
             {
                 using var ms = new MemoryStream();
                 certificate.CopyToAsync(ms);
-                return Json(_certificateProvider.Import(ms.ToArray(), password));
+                return Json(new CertificateInfoViewModel(_certificateProvider.Import(ms.ToArray(), password)));
             }
             catch (Exception ex)
             {
-                return BadRequest($"Certificate or password is invalid. {ex.Message}");
+                return BadRequest(ex.Message);
             }
         }
 
@@ -213,17 +208,14 @@ namespace Gemini.Web.Controllers
         /// A server that uses the thumbprint (which is incorrect to do so)
         /// will no longer recognize the certificate.
         /// </remarks>
-        [HttpPatch, ActionName("Certificate"), Produces("application/json", Type = typeof(CertificateInfo))]
+        [HttpPatch, ActionName("Certificate"), Produces("application/json", Type = typeof(CertificateInfoViewModel))]
         public IActionResult CertificatePatch(
-            string id,
-            [FromForm] string? password,
-            [FromForm] string displayName,
-            [FromForm] DateTime expiration)
+            string id, [FromForm] string? password, [FromForm] string displayName, [FromForm] DateTime expiration)
         {
             var exp = expiration.ToLocalTime().ToUniversalTime().Date;
             try
             {
-                return Json(_certificateProvider.Update(id, displayName, password, exp));
+                return Json(new CertificateInfoViewModel(_certificateProvider.Update(id, displayName, password, exp)));
             }
             catch (ArgumentException ex)
             {
