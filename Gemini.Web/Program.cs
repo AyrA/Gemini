@@ -72,4 +72,9 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-app.Run();
+//Automatically launch the browser in release mode
+#if !DEBUG
+app.Lifetime.ApplicationStarted.Register(() => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(app.Urls.First()) { UseShellExecute = true }));
+#endif
+
+await app.RunAsync();
