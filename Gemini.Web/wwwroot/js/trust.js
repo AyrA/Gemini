@@ -60,7 +60,6 @@
         const contents = Array.from(q("#addCertTemplate").content.childNodes).map(v => v.cloneNode(true));
         const btn = [{ text: "OK", value: "y" }, { text: "Cancel", value: "n", isCancel: true }];
         const dlgResult = await dlg.custom(contents, "Add a certificate", btn);
-        console.log(dlgResult);
         if (dlgResult === "y") {
             const div = ce("div");
             contents.forEach(v => div.appendChild(v));
@@ -117,7 +116,10 @@
                     const row = tbl.appendChild(ce("tr"));
                     row.appendChild(ce("td")).textContent = entry.host.toLowerCase();
                     entry.publicKeys.forEach(function (key) {
-                        row.appendChild(ce("td")).textContent = key.id;
+                        const idCell = row.appendChild(ce("td"));
+                        idCell.appendChild(mosaic(key.id, 6));
+                        idCell.appendChild(ce("span")).textContent = key.id.replace(/^(.{6})(.+)(.{6})$/, "$1...$3");
+
                         row.appendChild(ce("td")).textContent = formatDate(key.trustedAt);
                         row.appendChild(ce("td")).textContent = formatDate(key.trustExpires);
                         const opt = row.appendChild(ce("td"));
