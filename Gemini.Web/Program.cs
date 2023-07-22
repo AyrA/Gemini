@@ -73,8 +73,27 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 //Automatically launch the browser in release mode
-#if !DEBUG
-app.Lifetime.ApplicationStarted.Register(() => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(app.Urls.First()) { UseShellExecute = true }));
+//This may be broken on Linux because it's an anarchistic environment
+//without a universal way to handle protocols,
+//but that's more of a "them" problem instead of a "me" problem.
+#if DEBUG
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    try
+    {
+        var url = app.Urls.First();
+        app.Logger.LogInformation("Starting browser for {url}", url);
+        var nfo = new System.Diagnostics.ProcessStartInfo(url)
+        {
+            UseShellExecute = true
+        };
+        System.Diagnostics.Process.Start(nfo)?.Dispose();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not start the default application for HTTP urls");
+    }
+});
 #endif
 
-await app.RunAsync();
+app.Run();
