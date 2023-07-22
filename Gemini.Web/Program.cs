@@ -76,7 +76,7 @@ app.MapControllerRoute(
 //This may be broken on Linux because it's an anarchistic environment
 //without a universal way to handle protocols,
 //but that's more of a "them" problem instead of a "me" problem.
-#if DEBUG
+#if !DEBUG
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     try
