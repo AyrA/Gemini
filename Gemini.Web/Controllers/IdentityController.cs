@@ -63,7 +63,14 @@ namespace Gemini.Web.Controllers
             {
                 return BadRequest("Old and new password are identical");
             }
-            return Json(new CertificateInfoViewModel(_certificateProvider.UpdatePassword(id, currentPassword, newPassword)));
+            try
+            {
+                return Json(new CertificateInfoViewModel(_certificateProvider.UpdatePassword(id, currentPassword, newPassword)));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         /// <summary>
