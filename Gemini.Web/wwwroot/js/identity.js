@@ -25,7 +25,12 @@
                 cells.id.appendChild(mosaic(cert.id, 6));
                 cells.id.appendChild(ce("span")).textContent = cert.id.replace(/^(.{6})(.+)(.{6})$/, "$1...$3");
                 cells.expires.textContent = new Date(cert.validUntil).toLocaleString();
-                cells.encrypted.textContent = cert.encrypted ? "Yes" : "No";
+                const encBtn = cells.encrypted.appendChild(ce("button"));
+                encBtn.classList.add("btn", "btn-link");
+                encBtn.title = cert.encrypted ? "Change or clear the password" : "Add a password";
+                encBtn.dataset.cert = JSON.stringify(cert);
+                encBtn.textContent = cert.encrypted ? "Yes" : "No";
+                encBtn.addEventListener("click", evtEditPassword);
 
                 const buttons = {
                     export: cells.options.appendChild(ce("button")),
@@ -188,6 +193,133 @@
         }
     }
 
+    async function changeCert(cert) {
+        const contents = Array.from(q("#editCertTemplate").content.childNodes).map(v => v.cloneNode(true));
+        const div = ce("div");
+        contents.forEach(v => div.appendChild(v));
+
+        //Prefill values
+        div.querySelector("input[name=Name]").value = cert.name;
+        if (!cert.encrypted) {
+            div.querySelector("input[type=password]").parentNode.remove();
+        }
+        div.querySelector("input[name=Expiration]").value = cert.validUntil.split('T')[0];
+
+        const btn = [{ text: "OK", value: "y" }, { text: "Cancel", value: "n", isCancel: true }];
+        const dlgResult = await dlg.custom(div, "Edit your identity", btn);
+
+        if (dlgResult === "y") {
+            document.body.appendChild(div); //Move form out of the dialog
+            const name = div.querySelector("[name=Name]").value;
+            const password = div.querySelector("[name=Password]")?.value;
+            const exp = div.querySelector("[name=Expiration]").value;
+
+            const fd = new FormData();
+            fd.append("displayName", name);
+            if (password?.length > 0) {
+                fd.append("password", password);
+            }
+            fd.append("expiration", exp + "T00:00:00Z");
+            div.remove();
+            const result = await fetch("/Identity/Certificate/" + encodeURIComponent(cert.id), {
+                method: "PATCH",
+                body: fd
+            });
+            if (result.ok) {
+                await dlg.alert("Your identity was updated", "Identity updated");
+                await loadIdentities();
+            }
+            else {
+                await dlg.alert("The API failed with an error. " + (await result.text()), "API error");
+            }
+        }
+    }
+
+    async function askChange(id) {
+        const result = await fetch("/Identity/Certificate/" + encodeURIComponent(id));
+        if (result.ok) {
+            await changeCert(await result.json());
+        }
+        else {
+            await dlg.alert(["The API call failed with an error. ", await result.text()], "API error");
+        }
+    }
+
+    async function askEditPass(cert) {
+        if (cert.encrypted) {
+            const contents = Array.from(q("#editPasswordTemplate").content.childNodes).map(v => v.cloneNode(true));
+            const btn = [{ text: "OK", value: "y" }, { text: "Cancel", value: "n", isCancel: true }];
+            const dlgResult = await dlg.custom(contents, "Add a password", btn);
+            if (dlgResult === "y") {
+                const div = ce("div");
+                contents.forEach(v => div.appendChild(v));
+
+                const pw = div.querySelector("[name=Password]").value;
+                const pw1 = div.querySelector("[name=Password1]").value;
+                const pw2 = div.querySelector("[name=Password2]").value;
+                if (pw.length === 0) {
+                    await dlg.alert("The existing password cannot be empty", "Edit password");
+                    return;
+                }
+                if (pw1 !== pw2) {
+                    await dlg.alert("The new passwords do not match", "Edit password");
+                    return;
+                }
+
+                const fd = new FormData();
+                fd.append("currentPassword", pw);
+                fd.append("newPassword", pw1);
+                const result = await fetch("/Identity/ChangePassword/" + encodeURIComponent(cert.id), {
+                    method: "POST",
+                    body: fd
+                });
+                if (result.ok) {
+                    await dlg.alert("The password was sucessfully " + (pw1 ? "changed" : "removed"), "Edit password");
+                    await loadIdentities();
+                }
+                else {
+                    await dlg.alert(["The API call failed with an error. ", (await result.text())], "API error");
+                }
+            }
+        }
+        else {
+            const contents = Array.from(q("#addPasswordTemplate").content.childNodes).map(v => v.cloneNode(true));
+            const btn = [{ text: "OK", value: "y" }, { text: "Cancel", value: "n", isCancel: true }];
+            const dlgResult = await dlg.custom(contents, "Add a password", btn);
+            if (dlgResult === "y") {
+                const div = ce("div");
+                contents.forEach(v => div.appendChild(v));
+
+                const pw1 = div.querySelector("[name=Password1]").value;
+                const pw2 = div.querySelector("[name=Password2]").value;
+                if (pw1.length === 0) {
+                    await dlg.alert("The password cannot be empty", "Add password");
+                    return;
+                }
+                if (pw1 !== pw2) {
+                    await dlg.alert("The passwords do not match", "Add password");
+                    return;
+                }
+
+                const fd = new FormData();
+                fd.append("currentPassword", "");
+                fd.append("newPassword", pw1);
+                const result = await fetch("/Identity/ChangePassword/" + encodeURIComponent(cert.id), {
+                    method: "POST",
+                    body: fd
+                });
+                if (result.ok) {
+                    await dlg.alert("The password was sucessfully set", "Add password");
+                    await loadIdentities();
+                }
+                else {
+                    await dlg.alert(["The API call failed with an error. ", (await result.text())], "API error");
+                }
+            }
+        }
+    }
+
+    function evtEditPassword(e) { e.preventDefault(); askEditPass(JSON.parse(this.dataset.cert)); }
     function evtAddCert(e) { e.preventDefault(); askAdd(); }
     function evtDeleteCert(e) { e.preventDefault(); askDelete(this.parentNode.parentNode.dataset.certid); }
     function evtChangeCert(e) { e.preventDefault(); askChange(this.parentNode.parentNode.dataset.certid); }

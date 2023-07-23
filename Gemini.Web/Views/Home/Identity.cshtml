@@ -21,7 +21,7 @@
             <th>Options</th>
         </tr>
     </thead>
-    <tbody></tbody>
+    <tbody class="align-middle"></tbody>
 </table>
 
 <template id="createCertTemplate">
@@ -75,6 +75,114 @@
         <input type="password" autocomplete="off" name="Password" placeholder="Private key password" /><br />
         <i>
             If the selected file is password protected, enter it here
+        </i>
+    </div>
+</template>
+
+<template id="editCertTemplate">
+    <p>
+        It's not actually possible to change these values.<br />
+        What this does is it creates a new certificate using the existing private key,
+        then it deletes the old certificate.<br />
+        A server that identifies the client with the key will continue to correctly identify this new certificate.<br />
+        A server that uses the thumbprint (which is incorrect to do so) will no longer recognize the certificate.<br />
+        Note that even if you enter the same values again,
+        the thumbprint will be different.
+    </p>
+    <div class="mb-2">
+        Name<br />
+        <input type="text" name="Name" placeholder="Certificate name" required
+               pattern="[\w\s]+" title="Alphanumeric and spaces only" /><br />
+        <i>The name of the certificate. This is visible to the remote server</i>
+    </div>
+    <div class="mb-2">
+        Password<br />
+        <input type="password" autocomplete="off" name="Password" required placeholder="Encryption password" /><br />
+        <i>
+            This certificate is encrypted.
+            You must provide the password to decrypt it.
+        </i>
+    </div>
+    <div class="mb-2">
+        Expiration<br />
+        <input type="date" name="Expiration" required max="2099-12-31" /><br />
+        <i>
+            The expiration date is part of the identity system and as such is a required field.<br />
+            As computers get stronger, they become better at breaking cryptography.<br />
+            It's best practice to replace your identities every few years.
+        </i>
+    </div>
+</template>
+
+<template id="addPasswordTemplate">
+    <p>
+        The identity is currently not encrypted.<br />
+        Using a safe password prevents someone who steals the identity file from using it.<br />
+        This will not change the identity itself, and servers don't know if you have it encrypted or not.<br />
+        A good password passes all rules below:
+    </p>
+    <ul>
+        <li>12+ characters</li>
+        <li>Uppercase</li>
+        <li>Lowercase</li>
+        <li>Digits</li>
+        <li>Symbols</li>
+        <li>No dictionary words, addresses or names</li>
+    </ul>
+
+    <div class="mb-2">
+        Password<br />
+        <input type="password" autocomplete="off" name="Password1" required placeholder="Encryption password" /><br />
+        <i>
+            The identity is encrypted and can only be used with the password.<br />
+            It's impossible to get the identity back if you lose the password.
+        </i>
+    </div>
+    <div class="mb-2">
+        Password (repeat)<br />
+        <input type="password" autocomplete="off" name="Password2" required placeholder="Encryption password" /><br />
+        <i>
+            Repeat the password to confirm you typed it correctly.
+        </i>
+    </div>
+</template>
+
+<template id="editPasswordTemplate">
+    <p>
+        The identity is currently encrypted.<br />
+        Using a safe password prevents someone who steals the identity file from using it.<br />
+        This will not change the identity itself, and servers don't know if you have it encrypted or not.<br />
+        A good password passes all rules below:
+    </p>
+    <ul>
+        <li>12+ characters</li>
+        <li>Uppercase</li>
+        <li>Lowercase</li>
+        <li>Digits</li>
+        <li>Symbols</li>
+        <li>No dictionary words, addresses or names</li>
+    </ul>
+
+    <div class="mb-2">
+        Existing password<br />
+        <input type="password" autocomplete="off" name="Password" required placeholder="Existing password" /><br />
+        <i>
+            Enter the existing password of the identity here
+        </i>
+    </div>
+    <div class="mb-2">
+        New password<br />
+        <input type="password" autocomplete="off" name="Password1" placeholder="New password" /><br />
+        <i>
+            Enter the new password here.
+            You can leave this field blank if you want to remove the password (not recommended)
+        </i>
+    </div>
+    <div class="mb-2">
+        New password (repeat)<br />
+        <input type="password" autocomplete="off" name="Password2" placeholder="New password" /><br />
+        <i>
+            Repeat the password to confirm you typed it correctly.
         </i>
     </div>
 </template>
