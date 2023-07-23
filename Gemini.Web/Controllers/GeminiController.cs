@@ -3,6 +3,7 @@ using Gemini.Web.Models;
 using Gemini.Web.Services;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Gemini.Web.Controllers
@@ -12,26 +13,35 @@ namespace Gemini.Web.Controllers
     {
         private readonly ILogger<GeminiController> _logger;
         private readonly GeminiService _geminiService;
+        private readonly CertificateProviderService _certificateService;
 
-        public GeminiController(ILogger<GeminiController> logger, GeminiService geminiService)
+        public GeminiController(ILogger<GeminiController> logger, GeminiService geminiService, CertificateProviderService certificateService)
         {
             _logger = logger;
             _geminiService = geminiService;
+            _certificateService = certificateService;
         }
 
         /// <summary>
         /// Retrieves a gemini resource
         /// </summary>
         /// <param name="url">gemini URL</param>
+        /// <param name="certificate">Id of the client identity to use. Anonymous if not supplied</param>
+        /// <param name="password">Password of the client identity to use. Assumes unencrypted id if not supplied</param>
         /// <returns>gemini data</returns>
         [HttpPost, Produces("application/json")]
-        public async Task<GeminiResponseModel> Navigate([FromForm] Uri url)
+        public async Task<GeminiResponseModel> Navigate([FromForm] Uri url, [FromForm] string? certificate, [FromForm] string? password)
         {
             GeminiResponseModel? content;
             _logger.LogInformation("API request for Navigate({url})", url);
             try
             {
-                content = await _geminiService.GetContentAsync(url);
+                X509Certificate2? cert = null;
+                if (!string.IsNullOrEmpty(certificate))
+                {
+                    cert = _certificateService.GetCertificate(certificate, password).GetCertificate();
+                }
+                content = await _geminiService.GetContentAsync(url, cert);
             }
             catch (UnknownCertificateException ex)
             {

@@ -204,6 +204,11 @@ namespace Gemini.Web.Models
             return key.ExportEncryptedPkcs8PrivateKey(password, encryptionParams);
         }
 
+        public X509Certificate2 GetCertificate()
+        {
+            return _cert;
+        }
+
         public void Dispose()
         {
             GC.SuppressFinalize(this);
