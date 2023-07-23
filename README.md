@@ -7,7 +7,7 @@ This project is a full Gemini client implementation.
 *Features marked with an asterisk are either planned or under construction*
 
 - Full implementation of the protocol with redirect loop protection
-- Searching and password entry
+- Support for query prompts and password request when required by the remote
 - Fairly robust against servers not fully protocol compliant
 - Rendering of gemini files
 - Uses your existing web browser
@@ -16,7 +16,7 @@ This project is a full Gemini client implementation.
 - Backward and forward navigation using your browsers history function
 - Supports linking to other protocols (provided you have handlers for them)
 - Whitelisting of custom server certificates
-- \*Client certificate authentication
+- Client certificate authentication
 
 ## How to use
 
@@ -64,5 +64,4 @@ The application will always make anonymous attempts first.
 
 - Bookmarks
 - Start page configuration
-- Client certificate authentication (you can create them but not yet use them)
 - Gemini server (as a separate application)
