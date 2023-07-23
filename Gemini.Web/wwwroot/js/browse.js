@@ -29,20 +29,6 @@
 
     function fixUrl(url) {
         return getUrlParts(url).href;
-        /*
-        try {
-            return new URL(url).href;
-        }
-        catch {
-            try {
-                return new URL(url + "/").href;
-            }
-            catch {
-                console.warn("Unable to fix url:", url);
-                return url;
-            }
-        }
-        //*/
     }
 
     function combineUrl(url, baseUrl) {
