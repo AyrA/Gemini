@@ -1,5 +1,7 @@
 ﻿"use strict";
 (async function (q, qa, ce) {
+    //Last used client cert id per host
+    const lastId = {};
     const mimeTypes = [];
     const contentType = {
         unknown: 0,
@@ -25,11 +27,35 @@
         }
     }
 
+    function fixUrl(url) {
+        return getUrlParts(url).href;
+        /*
+        try {
+            return new URL(url).href;
+        }
+        catch {
+            try {
+                return new URL(url + "/").href;
+            }
+            catch {
+                console.warn("Unable to fix url:", url);
+                return url;
+            }
+        }
+        //*/
+    }
+
+    function combineUrl(url, baseUrl) {
+        const href = getUrlParts(baseUrl).href;
+        return new URL(url, href).href;
+    }
+
     function renderGemini(url, text) {
         const content = q("#gemini");
         const lines = text.trim().split(/\r?\n/);
         const elements = [];
         let preformat = false;
+        url = fixUrl(url);
         lines.forEach(function (line) {
             if (preformat && !line.match(/^```/)) {
                 console.debug("Adding", line, "to PRE");
@@ -61,7 +87,7 @@
                     return;
                 }
                 const e = ce("a");
-                e.href = new URL(match[1], url).href;
+                e.href = combineUrl(match[1], url);
                 e.textContent = match[2] || match[1];
                 e.setAttribute("target", "_blank");
                 elements.push(e);
@@ -142,8 +168,33 @@
         a.classList.add("btn", "btn-primary");
     }
 
+    function getUrlParts() {
+        const defaultPort = 1965;
+        const raw = q("[type=url]").value;
+        const m = raw.match(/^([^:]+):\/\/([^\/?#:]*)(?::(\d+))?(?:(\/[^?#:]*))?(?:\?([^#:]*))?(?:#(.*))?$/);
+        const url = {
+            scheme: m[1],
+            host: m[2],
+            port: Math.min(0xFFFF, Math.max(0, (m[3] | 0))),
+            path: m[4] ? m[4] : "/",
+            query: m[5],
+            hash: m[6]
+        };
+        url.isDefaultPort = url.port === defaultPort;
+        url.origin = url.scheme + "://" + url.host + (url.isDefaultPort ? "" : ":" + url.port);
+        url.href = url.origin + url.path;
+        if (url.query) {
+            url.href += "?" + url.query;
+        }
+        if (url.hash) {
+            url.href += "#" + url.hash;
+        }
+        console.debug("Parsed", raw, "into", url);
+        return url;
+    }
+
     function getUrl() {
-        return new URL(q("[type=url]").value).href;
+        return getUrlParts(q("[type=url]").value).href;
     }
 
     function setUrl(url) {
@@ -175,12 +226,20 @@
         setTitleFromUrl(getUrl());
         history.pushState({}, "", location.pathname + "#" + getUrl());
     }
-    
+
     async function render(redirectLimit) {
+        const fd = new FormData(q("#form"));
+        const currentCert = lastId[getUrlParts().origin];
+        if (currentCert?.id) {
+            fd.append("certificate", currentCert.id);
+            if (currentCert.password) {
+                fd.append("password", currentCert.password);
+            }
+        }
         renderGemini(getUrl(), "## Fetching " + getUrl() + "...");
         const response = await fetch(q("#form").action, {
             method: "POST",
-            body: new FormData(q("#form"))
+            body: fd
         });
         const text = await response.text();
         const json = tryParse(text);
@@ -277,6 +336,15 @@
         else if (json.isError) {
             saveHistory();
             renderGemini(getUrl(), "# " + json.statusCode + " SERVER ERROR\r\n```\r\n" + json.meta + "\r\n```");
+        }
+        else if (json.statusCode / 10 | 0 === 6) {
+            const origin = getUrlParts().origin;
+            renderGemini(getUrl(), "# " + json.statusCode + " LOGIN\r\n```\r\n" + json.meta + "\r\n```");
+            const ident = await selectIdentity(lastId[origin]?.id);
+            if (ident?.id) {
+                lastId[origin] = ident;
+                render(redirectLimit);
+            }
         }
         else if (json.statusCode === -2) {
             //Unknown certificate
