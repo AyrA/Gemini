@@ -113,9 +113,9 @@
                     if (entry.publicKeys.length === 0) {
                         return;
                     }
-                    const row = tbl.appendChild(ce("tr"));
-                    row.appendChild(ce("td")).textContent = entry.host.toLowerCase();
                     entry.publicKeys.forEach(function (key) {
+                        const row = tbl.appendChild(ce("tr"));
+                        row.appendChild(ce("td")).textContent = entry.host.toLowerCase();
                         const idCell = row.appendChild(ce("td"));
                         idCell.appendChild(mosaic(key.id, 6));
                         idCell.appendChild(ce("span")).textContent = key.id.replace(/^(.{6})(.+)(.{6})$/, "$1...$3");
