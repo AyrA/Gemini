@@ -16,7 +16,7 @@ namespace Gemini.Server
         }
         public override async Task<GeminiResponse?> Request(Uri url, EndPoint clientAddress)
         {
-            var p = Path.GetFullPath(Path.Combine(_root, url.LocalPath[1..]));
+            var p = Path.GetFullPath(Path.Combine(_root, url.LocalPath[1..])).TrimEnd(Path.DirectorySeparatorChar);
             if (p != _root && !p.StartsWith(_root + Path.DirectorySeparatorChar))
             {
                 Console.WriteLine("ERR: Path mapped to {0}, which is outside of {1}", p, _root);
@@ -26,15 +26,30 @@ namespace Gemini.Server
             {
                 if (_dirBrowse)
                 {
+                    var di = new DirectoryInfo(p);
+                    //Add trailing slash for directory URLs
+                    if (!url.LocalPath.EndsWith("/"))
+                    {
+                        return GeminiResponse.Redirect(url.LocalPath + "/");
+                    }
                     var sb = new StringBuilder();
                     sb.AppendLine($"# Directory Listing of {url.LocalPath}");
-                    foreach (var item in Directory.EnumerateFileSystemEntries(p))
+
+                    if (di.FullName != _root)
                     {
-                        var link = string.Join("/", item[p.Length..]
-                            .Split(Path.DirectorySeparatorChar)
-                            .Select(m => Uri.EscapeDataString(m)));
-                        var entry = item[(p.Length + 1)..].Replace(Path.DirectorySeparatorChar, '/');
-                        sb.AppendLine($"=> {link} {entry}");
+                        sb.AppendLine("=> ../ [UP]");
+                    }
+
+                    //Directories first, then files
+                    foreach (var dir in di.EnumerateDirectories())
+                    {
+                        var link = Uri.EscapeDataString(dir.Name);
+                        sb.AppendLine($"=> {link}/ \uD83D\uDCC1 {dir.Name}");
+                    }
+                    foreach (var file in di.EnumerateFiles())
+                    {
+                        var link = Uri.EscapeDataString(file.Name);
+                        sb.AppendLine($"=> {link} \uD83D\uDCC4 {file.Name}");
                     }
                     sb.AppendLine($"Generated for {clientAddress} at {DateTime.UtcNow}");
                     return await Task.FromResult(GeminiResponse.Ok(sb.ToString()));
@@ -49,7 +64,7 @@ namespace Gemini.Server
                 }
                 return await Task.FromResult(GeminiResponse.File(p));
             }
-            return null;
+            return await Task.FromResult(GeminiResponse.NotFound());
         }
 
         public override bool IsAccepted(Uri url, IPAddress remoteAddress) => true;

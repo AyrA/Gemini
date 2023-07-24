@@ -44,9 +44,9 @@ namespace Gemini.Server
             {
                 throw new ArgumentException("Client sent non-gemini URL: " + url);
             }
-            if (Regex.IsMatch(url, @"[\s\x00-\x1F]"))
+            if (Regex.IsMatch(url, @"[\x00-\x1F]"))
             {
-                throw new ArgumentException($"URL contains unescaped whitespace or control characters");
+                throw new ArgumentException($"URL contains unescaped control characters");
             }
             return new Uri(url);
         }

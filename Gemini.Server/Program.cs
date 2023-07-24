@@ -33,11 +33,35 @@ internal class Program
 
     private static X509Certificate2 CreateDevCert()
     {
+        var certFile = Path.Combine(AppContext.BaseDirectory, "server.crt");
+        if (File.Exists(certFile))
+        {
+            Console.WriteLine("Reusing existing developer certificate");
+            return X509Certificate2.CreateFromPemFile(certFile, certFile);
+        }
         Console.WriteLine("Creating developer certificate valid for one year");
         var req = new CertificateRequest(
             "CN=localhost, OU=Gemini.Server, O=https://github.com/AyrA/Gemini",
             RSA.Create(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        return req.CreateSelfSigned(DateTime.Today, DateTime.Today.AddYears(1));
+        var cert = req.CreateSelfSigned(DateTime.Today, DateTime.Today.AddYears(1));
+
+        byte[] certificateBytes = cert.RawData;
+        char[] certificatePem = PemEncoding.Write("CERTIFICATE", certificateBytes);
+
+        AsymmetricAlgorithm key = cert.GetRSAPrivateKey()
+            ?? (AsymmetricAlgorithm?)cert.GetDSAPrivateKey()
+            ?? (AsymmetricAlgorithm?)cert.GetECDsaPrivateKey()
+            ?? (AsymmetricAlgorithm?)cert.GetECDiffieHellmanPrivateKey()
+            ?? throw null!;
+        byte[] pubKeyBytes = key.ExportSubjectPublicKeyInfo();
+        byte[] privKeyBytes = key.ExportPkcs8PrivateKey();
+        char[] pubKeyPem = PemEncoding.Write("PUBLIC KEY", pubKeyBytes);
+        char[] privKeyPem = PemEncoding.Write("PRIVATE KEY", privKeyBytes);
+        using var sw = File.CreateText(certFile);
+        sw.WriteLine(certificatePem);
+        sw.WriteLine(pubKeyPem);
+        sw.WriteLine(privKeyPem);
+        return cert;
     }
 
     private static void Server_Connection(object sender, Socket client, IPEndPoint remoteAddress)
@@ -143,7 +167,7 @@ internal class Program
             RemoteCertificateValidationCallback = (_, _, _, _) => true
         });
         using var sw = new StreamWriter(stream);
-        sw.WriteLine("gemini://example.com/?query#fragment");
+        sw.WriteLine("gemini://127.0.0.1/MP3/");
         sw.Flush();
         using var sr = new StreamReader(stream);
         Console.WriteLine(sr.ReadToEnd());
