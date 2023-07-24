@@ -9,16 +9,18 @@ using System.Security.Cryptography.X509Certificates;
 
 internal class Program
 {
-    private static readonly List<GeminiHost> hosts = new() { new StaticFileHost("C:\\Temp", true) };
-    private static X509Certificate2? certificate;
+    private static readonly List<GeminiHost> hosts = new();
+    private static X509Certificate2? serverCertificate;
 
     private static void Main(string[] args)
     {
-        //Register Gemini URI scheme with the HTTP handler because it's good enough
+        hosts.Add(new StaticFileHost(args.FirstOrDefault() ?? Environment.CurrentDirectory, true));
+
+        //Register Gemini URI scheme with the HTTP handler because it's similar.
         //Gemini lacks the URI fragment but we don't care.
         UriParser.Register(new HttpStyleUriParser(), "gemini", 1965);
 
-        certificate = CreateDevCert();
+        serverCertificate = CreateDevCert();
 
         var server = new TcpServer(IPAddress.Loopback);
         server.Connection += Server_Connection;
@@ -71,7 +73,7 @@ internal class Program
         Console.WriteLine("Trying TLS server auth...");
         try
         {
-            tls.ServerAuth(certificate ?? throw null!);
+            tls.ServerAuth(serverCertificate ?? throw null!);
         }
         catch (Exception ex)
         {
