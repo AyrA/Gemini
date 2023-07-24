@@ -31,6 +31,21 @@ namespace Gemini.Lib
             }
         }
 
+        public static string BuildMimeLine(string mimeType, IDictionary<string, string>? properties = null)
+        {
+            if (string.IsNullOrWhiteSpace(mimeType))
+            {
+                throw new ArgumentException($"'{nameof(mimeType)}' cannot be null or whitespace.", nameof(mimeType));
+            }
+
+            if (properties == null || properties.Count == 0)
+            {
+                return mimeType;
+            }
+
+            return mimeType + "; " + string.Join("; ", properties.Select(m => $"{EscapeKey(m.Key)}={EscapeValue(m.Value)}"));
+        }
+
         public static string GetMimeType(string fileNameOrExtension)
         {
             if (string.IsNullOrEmpty(fileNameOrExtension))
@@ -43,6 +58,35 @@ namespace Gemini.Lib
                 return DefaultType;
             }
             return mimeMap.TryGetValue(ext, out var mime) ? mime : DefaultType;
+        }
+
+        private static string EscapeKey(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return key;
+            }
+
+            return Uri.EscapeDataString(key);
+        }
+
+        private static string EscapeValue(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "\"\"";
+            }
+
+            if (Regex.IsMatch(value, @"[\x00-\x1F]"))
+            {
+                value = Uri.EscapeDataString(value);
+            }
+
+            if (Regex.IsMatch(value, @"[\s;]"))
+            {
+                return $"\"{value}\"";
+            }
+            return value;
         }
     }
 }

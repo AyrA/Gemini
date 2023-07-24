@@ -112,10 +112,18 @@ namespace Gemini.Lib
         {
             contentType ??= MimeType.GetMimeType(filePath);
             var fs = System.IO.File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+            var props = new Dictionary<string, string>()
+            {
+                { "Size", fs.Length.ToString() },
+                { "Filename", Path.GetFileName(filePath) },
+                { "LastModified", System.IO.File.GetLastWriteTimeUtc(filePath).ToString("s") }
+            };
+
             return new GeminiResponse()
             {
                 Body = fs,
-                Status = $"{contentType}; filename=\"{Path.GetFileName(filePath)}\"; length={fs.Length}"
+                Status = MimeType.BuildMimeLine(contentType, props)
             };
         }
 
@@ -189,6 +197,15 @@ namespace Gemini.Lib
             {
                 Body = data,
                 Status = contentType
+            };
+        }
+
+        public static GeminiResponse Redirect(string location, bool permanent = false)
+        {
+            return new GeminiResponse()
+            {
+                StatusCode = permanent ? StatusCode.PermanentRedirect : StatusCode.TemporaryRedirect,
+                Status = location
             };
         }
 
