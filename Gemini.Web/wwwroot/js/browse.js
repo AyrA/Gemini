@@ -166,6 +166,9 @@
             query: m[5],
             hash: m[6]
         };
+        if (url.port === 0) {
+            url.port = defaultPort;
+        }
         url.isDefaultPort = url.port === defaultPort;
         url.origin = url.scheme + "://" + url.host + (url.isDefaultPort ? "" : ":" + url.port);
         url.href = url.origin + url.path;
