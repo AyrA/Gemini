@@ -106,15 +106,15 @@ internal class Program
             {
                 foreach (var host in hosts)
                 {
-                    if (host.IsAccepted(url, remoteAddress.Address))
+                    if (host.IsAccepted(url, remoteAddress.Address, tls.ClientCertificate))
                     {
-                        url = host.Rewrite(url, remoteAddress.Address);
+                        url = host.Rewrite(url, remoteAddress.Address, tls.ClientCertificate);
                         if (url == null)
                         {
                             Console.WriteLine("Early termination. {0} set the url to null", host.GetType().Name);
                             return;
                         }
-                        var response = host.Request(url, remoteAddress).Result;
+                        var response = host.Request(url, remoteAddress, tls.ClientCertificate).Result;
                         if (response != null)
                         {
                             using (response)

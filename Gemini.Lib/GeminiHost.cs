@@ -1,5 +1,6 @@
 ﻿using Gemini.Lib.Network;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Gemini.Lib
 {
@@ -49,6 +50,7 @@ namespace Gemini.Lib
         /// </summary>
         /// <param name="url">URL</param>
         /// <param name="remoteAddress">IP address of the request</param>
+        /// <param name="clientCertificate">Client certificate if provided by the connecting party</param>
         /// <returns>Rewritten URL</returns>
         /// <remarks>
         /// The rewritten URL replaces the passed in URL in the request pipeline for all future hosts.
@@ -59,24 +61,26 @@ namespace Gemini.Lib
         /// to always return false, a gemini host can effectively be turned into a pure URL rewrite mapper.
         /// Returning null will terminate the request early.
         /// </remarks>
-        public virtual Uri Rewrite(Uri url, IPAddress remoteAddress) => url;
+        public virtual Uri Rewrite(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate) => url;
 
         /// <summary>
         /// Processes a gemini request
         /// </summary>
         /// <param name="url">URL as requested by the client</param>
         /// <param name="clientAddress">remote IP address</param>
+        /// <param name="clientCertificate">Client certificate if provided by the connecting party</param>
         /// <returns>
         /// Gemini response.
         /// If a call to this method returns null, the request is passed on to the next host in line
         /// </returns>
-        public abstract Task<GeminiResponse?> Request(Uri url, EndPoint clientAddress);
+        public abstract Task<GeminiResponse?> Request(Uri url, IPEndPoint clientAddress, X509Certificate? clientCertificate);
 
         /// <summary>
         /// Checks whether the url and remote IP combination is allowed to use this host.
         /// </summary>
         /// <param name="url">URL</param>
         /// <param name="remoteAddress">Remote IP address</param>
+        /// <param name="clientCertificate">Client certificate if provided by the connecting party</param>
         /// <returns>true, if allowed, false otherwise</returns>
         /// <remarks>
         /// If this method returns true,
@@ -88,7 +92,7 @@ namespace Gemini.Lib
         /// The default implementation checks against
         /// <see cref="HostNames"/> and <see cref="RemoteAddressRestrictions"/>.
         /// </remarks>
-        public virtual bool IsAccepted(Uri url, IPAddress remoteAddress)
+        public virtual bool IsAccepted(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate)
         {
             if (url == null)
             {

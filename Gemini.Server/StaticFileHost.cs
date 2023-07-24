@@ -1,5 +1,6 @@
 ﻿using Gemini.Lib;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Gemini.Server
@@ -14,7 +15,8 @@ namespace Gemini.Server
             _root = Path.GetFullPath(rootDir);
             _dirBrowse = enableDirectoryBrowsing;
         }
-        public override async Task<GeminiResponse?> Request(Uri url, EndPoint clientAddress)
+
+        public override async Task<GeminiResponse?> Request(Uri url, IPEndPoint clientAddress, X509Certificate? ignored)
         {
             var p = Path.GetFullPath(Path.Combine(_root, url.LocalPath[1..])).TrimEnd(Path.DirectorySeparatorChar);
             if (p != _root && !p.StartsWith(_root + Path.DirectorySeparatorChar))
@@ -67,6 +69,6 @@ namespace Gemini.Server
             return await Task.FromResult(GeminiResponse.NotFound());
         }
 
-        public override bool IsAccepted(Uri url, IPAddress remoteAddress) => true;
+        public override bool IsAccepted(Uri _1, IPAddress _2, X509Certificate? _3) => true;
     }
 }

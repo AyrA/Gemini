@@ -69,6 +69,7 @@ namespace Gemini.Server
             Console.WriteLine("Disposing TLS connection");
             GC.SuppressFinalize(this);
             _stream.Dispose();
+            ClientCertificate?.Dispose();
         }
 
         private X509Certificate LocalCert(object sender, string? hostName)
