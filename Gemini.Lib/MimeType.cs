@@ -29,6 +29,7 @@ namespace Gemini.Lib
                     }
                 }
             }
+            mimeMap["gmi"] = "text/gemini";
         }
 
         public static string BuildMimeLine(string mimeType, IDictionary<string, string>? properties = null)
