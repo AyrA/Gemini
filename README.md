@@ -1,8 +1,10 @@
 # Gemini
 
-This project is a full Gemini client implementation.
+This project is a full Gemini client and server implementation.
 
-## Features
+## Client
+
+### Features
 
 *Features marked with an asterisk are either planned or under construction*
 
@@ -18,7 +20,7 @@ This project is a full Gemini client implementation.
 - Whitelisting of custom server certificates
 - Client certificate authentication
 
-## How to use
+### How to use
 
 There are currently no pre-built binaries yet.
 You can manually run it without a code editor:
@@ -30,13 +32,13 @@ You can manually run it without a code editor:
 This will build the application and run it on a random local port,
 then it opens your default browser
 
-## Query
+### Query
 
 The server may ask you for a query or a secret using a single line of descriptive text.
 In those cases you will be shown an input field.
 Simply input the requested value and press `ENTER` to submit the value.
 
-## Server certificates
+### Server certificates
 
 Most gemini servers run on self signed certificates.
 When you visit such a service, you will be asked to trust the certificate.
@@ -49,7 +51,7 @@ you can trust it but the trust is lost once you exit the application.
 You're only asked to trust a certificate
 if your operating system won't already trust it.
 
-## Client certificates
+### Client certificates
 
 *This is not yet implemented but documents how it will be*
 
@@ -60,8 +62,15 @@ If you don't yet have one, an error message will be shown.
 
 The application will always make anonymous attempts first.
 
-## Planned Features
+### Planned Features
 
 - Bookmarks
 - Start page configuration
-- Gemini server (as a separate application)
+
+## Server
+
+The server currently only serves static files but is otherwise fully protocol compliant,
+including requesting client certificates.
+
+The server is easily extendable by implementing `Gemini.Lib.GeminiHost` and registering it in the server.
+In the future the server will automatically search for host implementations and load them.
