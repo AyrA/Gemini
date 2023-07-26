@@ -73,7 +73,14 @@
                     return;
                 }
                 const e = ce("a");
-                e.href = combineUrl(match[1], url);
+                const linkUrl = combineUrl(match[1], url);
+                if (linkUrl.match(/^gemini:/i)) {
+                    e.dataset.url = linkUrl;
+                    e.href = "/Gemini/Get?url=" + encodeURIComponent(linkUrl);
+                }
+                else {
+                    e.href = linkUrl;
+                }
                 e.textContent = match[2] || match[1];
                 e.setAttribute("target", "_blank");
                 elements.push(e);
@@ -154,6 +161,7 @@
         a.classList.add("btn", "btn-primary");
     }
 
+    //This is a bit like the URL constructor, but actually working
     function getUrlParts() {
         const defaultPort = 1965;
         const raw = q("[type=url]").value;
@@ -201,7 +209,7 @@
                 isError: true,
                 isRedirect: false,
                 content: text,
-                meta: ""
+                meta: "Failed to decode JSON"
             }
         }
     }
@@ -263,6 +271,7 @@
                 audio.controls = true;
                 audio.src = "data:" + mime + ";base64," + json.content;
                 q("#gemini").appendChild(audio);
+                audio.play();
                 addLink(json.content, json.contentType, mime, fileName);
             }
             else if (mime.match(/^video\/.+/)) {
@@ -271,6 +280,7 @@
                 video.controls = true;
                 video.src = "data:" + mime + ";base64," + json.content;
                 q("#gemini").appendChild(video);
+                video.play();
                 addLink(json.content, json.contentType, mime, fileName);
             }
             else {
@@ -409,12 +419,14 @@
         render(5);
     });
 
-    //Fix up URL
+    //Fix up URL when it's changed.
+    //This turns human input into a fully qualified gemini URL
     q("#form [type=url]").addEventListener("change", function () {
         let v = this.value;
-        if (!v.match(/^gemini:\/\//)) {
-            v = "gemini://" + v;
+        if (!v.match(/^gemini:/)) {
+            v = "gemini:" + v;
         }
+        //Check if there's a trailing slash after the host name
         if (!v.match(/^gemini:\/\/[^\/]+\//)) {
             v += "/";
         }
@@ -423,11 +435,11 @@
         }
     });
 
-    //Watch over links from gemini pages
+    //Watch over links from gemini pages and reroute the requests
     document.addEventListener("click", function (e) {
-        if (e.target.nodeName === "A" && e.target.href.match(/^gemini:\/\//i)) {
+        if (e.target.nodeName === "A" && (e.target.dataset.url ?? "").match(/^gemini:/i)) {
             e.preventDefault();
-            setUrl(decodeURI(e.target.href));
+            setUrl(decodeURI(e.target.dataset.url));
             q("#form").requestSubmit();
         }
     });
@@ -439,6 +451,12 @@
         setUrl(url);
         q("#form").requestSubmit();
     });
+
+    //If there's already a gemini URL set, use it immediately.
+    if ((location?.hash ?? "").length > 1) {
+        setUrl(location.hash.substring(1));
+        q("#form").requestSubmit();
+    }
 
     //Back button
     q("#btnBack").addEventListener("click", function () {
