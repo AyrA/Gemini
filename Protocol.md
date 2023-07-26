@@ -316,9 +316,11 @@ Because of this, it's at the sole discretion of the client whether a certificate
 
 The suggested method is known as TOFU (Trust On First Use),
 which means the first time a server is visited, the client should blindly trust the received certificate.
+Because a new certificate would automatically be considered "wrong",
+it incentivises the creation of certificates with an excessive lifetime.
 
 This is possibly a bad idea because it gives state actors and ISPs an easy way to undermine encryption.
-Because of this, this document suggests that servers should use a well-known certificate.
+Because of this, this document suggests that servers should use a well-known CA to sign their certificate.
 Free certificates can be obtained automatically if one has access to an HTTP server and a domain.
 
 For self signed certificates, the user should be prompted for trust.
