@@ -1,14 +1,49 @@
 ﻿using Gemini.Lib;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
-namespace Gemini.Server
+namespace Gemini.Server.Network
 {
     public class StaticFileHost : GeminiHost
     {
+        private class StaticFileHostConfig
+        {
+            public string? RootDirectory { get; set; }
+            public bool AllowDirectoryBrowsing { get; set; }
+        }
+
         private readonly string _root;
         private readonly bool _dirBrowse;
+
+        private static readonly ILogger logger = Tools.GetLogger<StaticFileHost>();
+
+        public StaticFileHost()
+        {
+            var jsonFile = Path.Combine(AppContext.BaseDirectory, $"{nameof(StaticFileHost)}.json");
+            if (File.Exists(jsonFile))
+            {
+                try
+                {
+                    var config = File.ReadAllText(jsonFile).FromJson<StaticFileHostConfig>()
+                        ?? throw new Exception("Deserialized configuration is null");
+                    _root = config.RootDirectory ?? throw new Exception("Directory of deserialized config is null");
+                    _dirBrowse = config.AllowDirectoryBrowsing;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Unable to deserialize configuration");
+                    throw;
+                }
+            }
+            else
+            {
+                logger.LogWarning("Cannot find configuration: {file}", jsonFile);
+                _root = Path.Combine(AppContext.BaseDirectory, "StaticFileHost");
+                _dirBrowse = false;
+            }
+        }
 
         public StaticFileHost(string rootDir, bool enableDirectoryBrowsing)
         {
@@ -16,12 +51,12 @@ namespace Gemini.Server
             _dirBrowse = enableDirectoryBrowsing;
         }
 
-        public override async Task<GeminiResponse?> Request(Uri url, IPEndPoint clientAddress, X509Certificate? ignored)
+        public override async Task<GeminiResponse?> Request(Uri url, IPEndPoint client, X509Certificate? ignored)
         {
             var p = Path.GetFullPath(Path.Combine(_root, url.LocalPath[1..])).TrimEnd(Path.DirectorySeparatorChar);
             if (p != _root && !p.StartsWith(_root + Path.DirectorySeparatorChar))
             {
-                Console.WriteLine("ERR: Path mapped to {0}, which is outside of {1}", p, _root);
+                logger.LogWarning("Possible path traversal attack by {ip}: Path mapped to {path}, which is outside of {root}", client, p, _root);
                 return await Task.FromResult(GeminiResponse.BadRequest());
             }
             if (Directory.Exists(p))
@@ -34,6 +69,9 @@ namespace Gemini.Server
                     {
                         return GeminiResponse.Redirect(url.LocalPath + "/");
                     }
+
+                    logger.LogInformation("Building directory listing of {path} for {client}", p, client);
+
                     var sb = new StringBuilder();
                     sb.AppendLine($"# Directory Listing of {url.LocalPath}");
 
@@ -53,17 +91,14 @@ namespace Gemini.Server
                         var link = Uri.EscapeDataString(file.Name);
                         sb.AppendLine($"=> {link} \uD83D\uDCC4 {file.Name}");
                     }
-                    sb.AppendLine($"Generated for {clientAddress} at {DateTime.UtcNow}");
+                    sb.AppendLine($"Generated for {client} at {DateTime.UtcNow}");
                     return await Task.FromResult(GeminiResponse.Ok(sb.ToString()));
                 }
                 return await Task.FromResult(new GeminiResponse(StatusCode.TemporaryFailure, null, "Forbidden"));
             }
             if (File.Exists(p))
             {
-                if (!p.StartsWith(_root + Path.DirectorySeparatorChar))
-                {
-                    return await Task.FromResult(GeminiResponse.BadRequest());
-                }
+                logger.LogInformation("Sending file {file} to {client}", p, client);
                 return await Task.FromResult(GeminiResponse.File(p));
             }
             return await Task.FromResult(GeminiResponse.NotFound());
