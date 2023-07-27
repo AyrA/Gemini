@@ -227,9 +227,9 @@ Behaves like code 40.
 
 ### 44 Slow Down
 
-The server demands, that the client to temporarily stop making requests.
+The server demands, that the client temporarily stops making requests.
 The status contains a sole integer that contains the number of seconds
-during which the client MUST not make further requests.
+during which the client MUST NOT make further requests.
 
 ### 50 Permanent Failure
 
@@ -260,7 +260,7 @@ Behaves like code 50.
 
 ### 59 Bad Request
 
-The server considers the client request invalid
+The server considers the client request invalid.
 Behaves like code 50.
 
 Reasons for this code vary, and may be due to causes including but not limited to:
