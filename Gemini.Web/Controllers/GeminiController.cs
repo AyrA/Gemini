@@ -65,7 +65,7 @@ namespace Gemini.Web.Controllers
                 content = new GeminiResponseModel(GeminiResponseModel.InternalErrors.GenericError,
                     "PROTOCOL VIOLATION")
                 {
-                    Content = Encoding.UTF8.GetBytes(ex.Message)
+                    Content = CombineExceptionMessages(ex)
                 };
             }
             return content;
@@ -155,6 +155,17 @@ namespace Gemini.Web.Controllers
             {
                 return StatusCode(500, "Unable to retrieve content from the backend. " + ex.Message);
             }
+        }
+
+        private static string CombineExceptionMessages(Exception? ex)
+        {
+            var msg = new List<string>();
+            while (ex != null)
+            {
+                msg.Add(ex.Message);
+                ex = ex.InnerException;
+            }
+            return string.Join("\r\n", msg);
         }
     }
 }

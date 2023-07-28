@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using Gemini.Lib;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Gemini.Web.Models
@@ -27,16 +28,8 @@ namespace Gemini.Web.Models
         /// <param name="password">Certificate file password</param>
         public CertificateInfo(string certPath, string? password)
         {
-            if (!string.IsNullOrEmpty(password))
-            {
-                _cert = X509Certificate2.CreateFromEncryptedPemFile(certPath, password);
-                Encrypted = true;
-            }
-            else
-            {
-                _cert = X509Certificate2.CreateFromPemFile(certPath);
-                Encrypted = false;
-            }
+            _cert = Certificates.ReadFromFile(certPath, password);
+            Encrypted = !string.IsNullOrEmpty(password);
         }
 
         /// <summary>
@@ -61,7 +54,7 @@ namespace Gemini.Web.Models
             var createDate = DateTime.UtcNow.Date;
             createDate = createDate.AddDays(-(createDate.Day - 1));
 
-            return new CertificateInfo(GetCert(certDisplayName, ECDsa.Create(), createDate, expiration));
+            return new CertificateInfo(Certificates.CreateCertificate(certDisplayName, createDate, expiration));
         }
 
         /// <summary>
@@ -141,22 +134,7 @@ namespace Gemini.Web.Models
         /// <returns>PEM data</returns>
         public string Export(string? password)
         {
-            byte[] certificateBytes = _cert.RawData;
-            char[] certificatePem = PemEncoding.Write("CERTIFICATE", certificateBytes);
-
-            AsymmetricAlgorithm key = GetAsymmetricAlgorithmKey();
-            byte[] pubKeyBytes = key.ExportSubjectPublicKeyInfo();
-            byte[] privKeyBytes = GetKeyBytes(key, password);
-            char[] pubKeyPem = PemEncoding.Write("PUBLIC KEY", pubKeyBytes);
-            char[] privKeyPem = PemEncoding.Write(
-                (string.IsNullOrEmpty(password) ? "" : "ENCRYPTED ") + "PRIVATE KEY",
-                privKeyBytes);
-            using var sw = new StringWriter();
-            sw.WriteLine(certificatePem);
-            sw.WriteLine(pubKeyPem);
-            sw.WriteLine(privKeyPem);
-            sw.Flush();
-            return sw.ToString();
+            return Certificates.Export(_cert, password);
         }
 
         private static X509Certificate2 GetCert(string name, ECDsa key, DateTime created, DateTime expires)
@@ -165,6 +143,7 @@ namespace Gemini.Web.Models
             return req.CreateSelfSigned(created, expires);
         }
 
+        /*
         private AsymmetricAlgorithm GetAsymmetricAlgorithmKey()
         {
             AsymmetricAlgorithm? key;
@@ -203,6 +182,7 @@ namespace Gemini.Web.Models
                 500_000);
             return key.ExportEncryptedPkcs8PrivateKey(password, encryptionParams);
         }
+        //*/
 
         public X509Certificate2 GetCertificate()
         {

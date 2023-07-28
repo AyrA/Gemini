@@ -19,4 +19,7 @@
     <PackageReference Include="NReco.Logging.File" Version="1.1.6" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gemini.Lib\Gemini.Lib.csproj" />
+  </ItemGroup>
 </Project>

@@ -80,18 +80,26 @@ namespace Gemini.Web.Services
                 {
                     _logger.LogInformation("Performing client SSL authentication");
                 }
-                return clientCertificate!;
+                //Windows fix
+                return localCertificates[0];
             }
 
-            using var ssl = new SslStream(
-                client.GetStream(), false,
-                RemoteCallback, clientCertSelect,
-                EncryptionPolicy.RequireEncryption);
+            var hasCert = clientCertificate != null;
+            using var ssl = new SslStream(client.GetStream(), false);
 
             _logger.LogInformation("Performing SSL authentication for {host}", host);
+            var opt = new SslClientAuthenticationOptions()
+            {
+                TargetHost = host,
+                ApplicationProtocols = new() { new SslApplicationProtocol("GEMINI") },
+                ClientCertificates = hasCert ? new X509CertificateCollection(new[] { clientCertificate! }) : null,
+                EncryptionPolicy = EncryptionPolicy.RequireEncryption,
+                LocalCertificateSelectionCallback = hasCert ? clientCertSelect : null,
+                RemoteCertificateValidationCallback = RemoteCallback
+            };
             try
             {
-                await ssl.AuthenticateAsClientAsync(host);
+                await ssl.AuthenticateAsClientAsync(opt);
                 if (!ssl.IsAuthenticated)
                 {
                     _logger.LogWarning("SSL authentication failed for {host}", host);
