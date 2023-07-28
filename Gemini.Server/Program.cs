@@ -1,6 +1,8 @@
 ﻿using Gemini.Lib;
 using Gemini.Server;
+using Gemini.Server.Network;
 using Microsoft.Extensions.Logging;
+using System.Net;
 
 internal class Program
 {
@@ -10,7 +12,6 @@ internal class Program
     {
         using var cert = Certificates.CreateCertificate("TEST");
 
-        /*
         //Register Gemini URI scheme with the HTTP handler because it's similar.
         //Gemini lacks the URI fragment but we don't care.
         UriParser.Register(new HttpStyleUriParser(), "gemini", 1965);
@@ -22,8 +23,7 @@ internal class Program
         server.Start();
         logger.LogInformation("Server listening on {endpoint}", server.LocalEndpoint);
 
-        //Debugging.DumbClient(new IPEndPoint(IPAddress.Loopback, TcpServer.DefaultPort));
-        //*/
+        Debugging.DumbClient(new IPEndPoint(IPAddress.Loopback, TcpServer.DefaultPort));
         logger.LogInformation("Server ready. Press CTRL+C to exit");
         Thread.CurrentThread.Join();
     }
