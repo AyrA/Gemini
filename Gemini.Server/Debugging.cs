@@ -1,15 +1,20 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Gemini.Lib;
+using Gemini.Server.Network;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Gemini.Server
 {
     internal class Debugging
     {
         private static readonly ILogger logger = Tools.GetLogger<Debugging>();
+        private static X509Certificate2? cert;
+
 
         [Conditional("DEBUG")]
         public static void DumbClient(IPEndPoint remote)
@@ -29,16 +34,31 @@ namespace Gemini.Server
             using var ns = new NetworkStream(c.Client, true);
             using var stream = new SslStream(ns, false);
 
+            if (cert == null)
+            {
+                cert = Certificates.CreateCertificate("YOLO");
+#if DEBUG
+                foreach (var host in GeminiHostScanner.Hosts)
+                {
+                    if (host is StaticFileHost staticHost)
+                    {
+                        staticHost.RegisterThumbprint(cert.Thumbprint);
+                    }
+                }
+#endif
+            }
             try
             {
-                stream.AuthenticateAsClient(new SslClientAuthenticationOptions()
+                var opt = new SslClientAuthenticationOptions
                 {
                     TargetHost = "localhost",
-                    EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                     EncryptionPolicy = EncryptionPolicy.RequireEncryption,
                     ApplicationProtocols = new() { new SslApplicationProtocol("GEMINI") },
-                    RemoteCertificateValidationCallback = (_, _, _, _) => true
-                });
+                    RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                    ClientCertificates = new X509CertificateCollection(new X509Certificate[] { cert })
+                };
+                stream.AuthenticateAsClient(opt);
             }
             catch (Exception ex)
             {
@@ -51,7 +71,7 @@ namespace Gemini.Server
             using var sw = new StreamWriter(stream);
             try
             {
-                sw.WriteLine("gemini://127.0.0.1/");
+                sw.WriteLine("gemini://example.com/");
                 sw.Flush();
                 logger.LogDebug("Response: {data}", sr.ReadToEnd());
             }

@@ -40,12 +40,13 @@ namespace Gemini.Server.Network
                 throw new ArgumentNullException(nameof(cert));
             }
             logger.LogInformation("Authenticate as TLS server");
+            //Fix Windows Bug
             var certFix = new X509Certificate2(cert.Export(X509ContentType.Pkcs12));
             var opt = new SslServerAuthenticationOptions()
             {
                 AllowRenegotiation = true,
                 ClientCertificateRequired = true,
-                EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                 EncryptionPolicy = EncryptionPolicy.RequireEncryption,
                 ServerCertificate = certFix,
                 RemoteCertificateValidationCallback = ProcessClientCert,

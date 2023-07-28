@@ -60,15 +60,20 @@ namespace Gemini.Server
             {
                 GeminiResponse? response = null;
                 var hosts = GeminiHostScanner.Hosts;
-                logger.LogInformation("Request URL for {address}: {url}", remoteAddress, url);
+                logger.LogInformation("Request URL from {address}: {url}", remoteAddress, url);
                 for (var i = 0; i < hosts.Length && response == null; i++)
                 {
+                    logger.LogDebug("Checking host {index}/{count}", i + 1, hosts.Length);
                     var host = hosts[i];
                     var hostname = host.GetType().FullName;
                     bool accepted = false;
                     try
                     {
                         accepted = host.IsAccepted(url, remoteAddress.Address, tls.ClientCertificate);
+                        if (!accepted)
+                        {
+                            logger.LogDebug("Host rejected request");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -115,21 +120,20 @@ namespace Gemini.Server
                                 logger.LogError(ex, "Failed to send response data to {address}", remoteAddress);
                             }
                         }
+                        //Stop processing
+                        return;
                     }
-                    else
-                    {
-                        logger.LogInformation("No response. Sending default 404 to {address}", remoteAddress);
-                        //No host accepted the request
-                        try
-                        {
-                            using var g404 = GeminiResponse.NotFound();
-                            g404.SendTo(authStream);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogWarning(ex, "Unable to send error response to {address}", remoteAddress);
-                        }
-                    }
+                }
+                //No host accepted the request
+                logger.LogInformation("No response from any host. Sending default 'not found' to {address}", remoteAddress);
+                try
+                {
+                    using var g404 = GeminiResponse.NotFound();
+                    g404.SendTo(authStream);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Unable to send error response to {address}", remoteAddress);
                 }
             }
         }

@@ -1,5 +1,4 @@
-﻿using Gemini.Lib.Network;
-using System.Net;
+﻿using System.Net;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Gemini.Lib
@@ -9,23 +8,6 @@ namespace Gemini.Lib
     /// </summary>
     public abstract class GeminiHost
     {
-        /// <summary>
-        /// Host names this instance is accepting requests for.
-        /// An empty list (or null) is equivalent to a single "*" entry.
-        /// </summary>
-        /// <remarks>
-        /// The port specification is optional.
-        /// If not supplied, all listening ports forward to the specified host.
-        /// A special wildcard host "*" can be specified to listen for all hosts.
-        /// The value is checked against the host portion of every client request.
-        /// </remarks>
-        public virtual string[]? HostNames { get; protected set; }
-
-        /// <summary>
-        /// If not empty or null, contains the remote IP ranges permitted to connect
-        /// </summary>
-        public virtual IpRange[]? RemoteAddressRestrictions { get; protected set; }
-
         /// <summary>
         /// Called once by the hosting environment
         /// </summary>
@@ -92,60 +74,6 @@ namespace Gemini.Lib
         /// The default implementation checks against
         /// <see cref="HostNames"/> and <see cref="RemoteAddressRestrictions"/>.
         /// </remarks>
-        public virtual bool IsAccepted(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate)
-        {
-            if (url == null)
-            {
-                return false;
-            }
-
-            //Check IP restriction first, if any
-            var ranges = RemoteAddressRestrictions;
-            if (ranges != null && ranges.Length > 0)
-            {
-                var passed = false;
-                foreach (var range in ranges)
-                {
-                    if (passed = range.InRange(remoteAddress))
-                    {
-                        break;
-                    }
-                }
-                if (!passed)
-                {
-                    return false;
-                }
-            }
-
-            var host = url.Host.ToLower();
-            if (url.IsDefaultPort)
-            {
-                host += ":1965";
-            }
-            var hosts = HostNames;
-            //Empty lists accept all hosts
-            if (hosts == null || hosts.Length == 0)
-            {
-                return true;
-            }
-            //Wildcard host matching
-            if (hosts.Contains("*") || hosts.Contains("*:*") || hosts.Contains($"*:{url.Port}"))
-            {
-                return true;
-            }
-            foreach (var hostEntry in hosts)
-            {
-                var entry = hostEntry?.ToLower();
-                if (string.IsNullOrEmpty(entry))
-                {
-                    continue;
-                }
-                if (entry == host || entry + ":1965" == host)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
+        public abstract bool IsAccepted(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate);
     }
 }

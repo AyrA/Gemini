@@ -127,15 +127,6 @@ namespace Gemini.Lib
             };
         }
 
-        public static GeminiResponse Auth(string? status = null)
-        {
-            return new GeminiResponse()
-            {
-                StatusCode = StatusCode.ClientCertificateRequired,
-                Status = status ?? StatusCode.ClientCertificateRequired.ToString()
-            };
-        }
-
         public static GeminiResponse NotFound(string? status = null)
         {
             return new GeminiResponse()
@@ -184,14 +175,13 @@ namespace Gemini.Lib
         }
 
         /// <summary>
-        /// 
+        /// Creates a success response with the given stream data
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="contentType"></param>
-        /// <returns></returns>
+        /// <param name="data">Body content</param>
+        /// <param name="contentType">Content type of <paramref name="data"/></param>
+        /// <returns>Gemini response</returns>
         /// <remarks><paramref name="data"/> is disposed automatically after processing</remarks>
-
-        public static GeminiResponse Ok(Stream data, string contentType)
+        public static GeminiResponse Ok(Stream? data, string contentType)
         {
             return new GeminiResponse()
             {
@@ -215,6 +205,15 @@ namespace Gemini.Lib
             {
                 StatusCode = permanent ? StatusCode.PermanentRedirect : StatusCode.TemporaryRedirect,
                 Status = location.ToString()
+            };
+        }
+
+        public static GeminiResponse CertificateRequired(string? status = null)
+        {
+            return new GeminiResponse()
+            {
+                StatusCode = StatusCode.ClientCertificateRequired,
+                Status = status ?? StatusCode.ClientCertificateRequired.ToString()
             };
         }
     }

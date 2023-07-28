@@ -102,6 +102,14 @@ namespace Gemini.Lib.Network
             {
                 throw new ArgumentException($"'{nameof(addr)}' cannot be null or whitespace.", nameof(addr));
             }
+
+            //Single ip entry
+            if (IPAddress.TryParse(addr, out var ip))
+            {
+                return new IpRange(ip, ip);
+            }
+
+            //CIDR
             if (addr.Contains('/'))
             {
                 var parts = addr.Split('/');
@@ -111,6 +119,8 @@ namespace Gemini.Lib.Network
                 }
                 return new IpRange(IPAddress.Parse(parts[0]), int.Parse(parts[1]));
             }
+
+            //Custom range
             if (addr.Contains('-'))
             {
                 var parts = addr.Split('-');
@@ -120,7 +130,7 @@ namespace Gemini.Lib.Network
                 }
                 return new IpRange(IPAddress.Parse(parts[0].Trim()), IPAddress.Parse(parts[1].Trim()));
             }
-            throw new FormatException("Argument neither in 'IP/CIDR' nor 'IP-IP' format");
+            throw new FormatException($"Argument '{addr}' neither in 'IP/CIDR' nor 'IP-IP' format");
         }
     }
 }
