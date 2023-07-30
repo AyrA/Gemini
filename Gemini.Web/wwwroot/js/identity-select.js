@@ -2,7 +2,7 @@
 (function (q, qa, ce) {
     const dlg = new ezDlg(false);
 
-    window.selectIdentity = async function selectIdentity(id) {
+    window.selectIdentity = async function selectIdentity(id, title) {
         const response = await fetch("/Identity/CertificateList");
         if (response.ok) {
             const data = await response.json();
@@ -43,7 +43,7 @@
 
                 //Title
                 contents.push(ce("p"));
-                contents[0].textContent = "Select an identity from the list below";
+                contents[0].textContent = title ?? "Select an identity from the list below";
 
                 //Identity selection
                 contents.push(ce("select"));
@@ -98,7 +98,7 @@
                 });
 
                 //Render
-                const selectResult = await dlg.custom(contents, "select an identity", btn);
+                const selectResult = await dlg.custom(contents, title ?? "select an identity", btn);
                 if (selectResult === "ok") {
                     return {
                         id: contents[1].value,

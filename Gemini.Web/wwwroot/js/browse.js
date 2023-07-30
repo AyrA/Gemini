@@ -338,8 +338,8 @@
         }
         else if (json.statusCode / 10 | 0 === 6) {
             const origin = getUrlParts().origin;
-            renderGemini(getUrl(), "# " + json.statusCode + " LOGIN\r\n```\r\n" + json.meta + "\r\n```");
-            const ident = await selectIdentity(lastId[origin]?.id);
+            renderGemini(getUrl(), "# " + json.statusCode + " CLIENT CERTIFICATE REQUIRED\r\n```\r\n" + json.meta + "\r\n```");
+            const ident = await selectIdentity(lastId[origin]?.id, "The server at " + origin + " wants you to authenticate");
             if (ident?.id) {
                 lastId[origin] = ident;
                 render(redirectLimit);
