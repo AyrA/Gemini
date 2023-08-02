@@ -1,10 +1,14 @@
-﻿using System.Security.Cryptography;
+﻿using AyrA.AutoDI;
+using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 
-namespace Gemini.Lib
+namespace Gemini.Lib.Services
 {
-    public static class Certificates
+    [AutoDIRegister(AutoDIType.Singleton)]
+    public class CertificateService
     {
         /// <summary>
         /// Setting this to false falls back to RSA certificates
@@ -18,17 +22,20 @@ namespace Gemini.Lib
 
         private static readonly PbeParameters encParams = new(
             PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000);
+        private readonly ILogger<CertificateService> _logger;
+
+        public CertificateService(ILogger<CertificateService> logger)
+        {
+            _logger = logger;
+        }
 
         public static bool IsValid(X509Certificate cert) => IsValid((X509Certificate2)cert);
 
         public static bool IsValid(X509Certificate2 cert)
         {
-            if (cert == null)
-            {
-                return false;
-            }
             return
-                cert.NotAfter > DateTime.Now
+                cert != null
+                && cert.NotAfter > DateTime.Now
                 && cert.NotBefore < DateTime.Now;
         }
 
@@ -41,15 +48,20 @@ namespace Gemini.Lib
             return thumbprint.Length == 40 && Regex.IsMatch(thumbprint, @"^[\da-fA-F]+$");
         }
 
-        public static string Export(X509Certificate2 certificate) => Export(certificate, null);
+        public string Export(X509Certificate2 certificate) => Export(certificate, null);
 
-        public static string Export(X509Certificate2 certificate, string? password)
+        public string Export(X509Certificate2 certificate, string? password)
         {
             if (certificate is null)
             {
+                _logger.LogError("Certificate argument was null");
                 throw new ArgumentNullException(nameof(certificate));
             }
             bool encrypt = !string.IsNullOrEmpty(password);
+            if (!encrypt)
+            {
+                _logger.LogInformation("Exporting certificate {thumb} unencrypted", certificate.Thumbprint);
+            }
 
             using var sw = new StringWriter();
 
@@ -72,15 +84,15 @@ namespace Gemini.Lib
                 //RSA requires extra work
                 if (key is RSA rsaKey)
                 {
+                    using var tmpKey = MakeExportable(rsaKey);
                     byte[] privKeyBytes;
                     if (!encrypt)
                     {
-                        using var tempKey = MakeExportable(rsaKey);
-                        privKeyBytes = tempKey.ExportRSAPrivateKey();
+                        privKeyBytes = tmpKey.ExportRSAPrivateKey();
                     }
                     else
                     {
-                        privKeyBytes = rsaKey.ExportEncryptedPkcs8PrivateKey(password, encParams);
+                        privKeyBytes = tmpKey.ExportEncryptedPkcs8PrivateKey(password, encParams);
                     }
 
                     sw.WriteLine(PemEncoding.Write(encrypt ? "ENCRYPTED RSA PRIVATE KEY" : "RSA PRIVATE KEY", privKeyBytes));
@@ -97,12 +109,20 @@ namespace Gemini.Lib
             return sw.ToString();
         }
 
-        public static X509Certificate2 CreateCertificate(string name) => CreateCertificate(name, DateTime.UtcNow.Date.AddYears(1));
+        public X509Certificate2 CreateCertificate(string name) => CreateCertificate(name, null);
 
-        public static X509Certificate2 CreateCertificate(string name, DateTime validTo)
-            => CreateCertificate(name, DateTime.UtcNow.Date, validTo);
+        public X509Certificate2 CreateCertificate(string name, IEnumerable<string>? san) => CreateCertificate(name, san, DateTime.UtcNow.Date.AddYears(1));
 
-        public static X509Certificate2 CreateCertificate(string name, DateTime validFrom, DateTime validTo)
+        public X509Certificate2 CreateCertificate(string name, IEnumerable<string>? san, DateTime validTo)
+            => CreateCertificate(name, san, DateTime.UtcNow.Date, validTo);
+
+        public X509Certificate2 CreateCertificate(string name, IEnumerable<string>? san, DateTime validFrom, DateTime validTo)
+        {
+            var key = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+            return CreateFromKey(name, san, validFrom, validTo, key);
+        }
+
+        public X509Certificate2 CreateFromKey(string name, IEnumerable<string>? san, DateTime validFrom, DateTime validTo, ECDsa existingKey)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -120,6 +140,12 @@ namespace Gemini.Lib
             {
                 throw new ArgumentOutOfRangeException(nameof(validTo));
             }
+            if (existingKey is null)
+            {
+                throw new ArgumentNullException(nameof(existingKey));
+            }
+
+            _logger.LogInformation("Creating certificate {name} for range {from} --> {to}", name, validFrom, validTo);
 
             var segments = new string[]
             {
@@ -131,40 +157,118 @@ namespace Gemini.Lib
             var dName = new X500DistinguishedName(string.Join("\r\n", segments),
                 //Using line breaks here means we don't have to escape other special characters
                 X500DistinguishedNameFlags.UseNewLines);
-            var req = useEcc
-                ? new CertificateRequest(dName, ECDsa.Create(ECCurve.NamedCurves.nistP384), HashAlgorithmName.SHA256)
-                : new CertificateRequest(dName, RSA.Create(4096), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var req = new CertificateRequest(dName, MakeExportable(existingKey), HashAlgorithmName.SHA256);
+
+            if (san != null)
+            {
+                var sanBuilder = new SubjectAlternativeNameBuilder();
+                var proc = 0;
+                foreach (var entry in san.DistinctBy(m => m?.ToLower() ?? ""))
+                {
+                    if (string.IsNullOrWhiteSpace(entry))
+                    {
+                        _logger.LogWarning("SAN list has empty/whitespace entry. Skipping it");
+                        continue;
+                    }
+                    if (IPAddress.TryParse(entry, out var ip))
+                    {
+                        sanBuilder.AddIpAddress(ip);
+                        ++proc;
+                    }
+                    else if (Uri.TryCreate(entry, UriKind.Absolute, out var url))
+                    {
+                        sanBuilder.AddUri(url);
+                        ++proc;
+                    }
+                    else if (Uri.CheckHostName(entry) != UriHostNameType.Unknown)
+                    {
+                        sanBuilder.AddDnsName(entry);
+                        ++proc;
+                    }
+                    else if (entry.Contains('@'))
+                    {
+                        sanBuilder.AddEmailAddress(entry);
+                        ++proc;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No idea how to handle SAN name {name}. Skipping it.", entry);
+                    }
+                }
+                //Don't add extensions if we skipped all entries
+                if (proc > 0)
+                {
+                    req.CertificateExtensions.Add(sanBuilder.Build());
+                }
+            }
+
             using var cert = req.CreateSelfSigned(validFrom, validTo);
             //Windows fix: Need to export and re-import it or weird crypto API errors start happening.
-            return new X509Certificate2(cert.Export(X509ContentType.Pkcs12), (string?)null,
-              X509KeyStorageFlags.Exportable);
+            return MakeExportable(cert);
         }
 
-        public static X509Certificate2 ReadFromPemData(string pemData, string? password)
+        public X509Certificate2 ReadFromPemData(string pemData, string? password)
         {
-            if (pemData.Contains("ENCRYPTED PRIVATE KEY"))
+            _logger.LogDebug("Trying to decode pem data. Use password: {usepass}", !string.IsNullOrEmpty(password));
+            if (pemData.Contains("ENCRYPTED PRIVATE KEY") || pemData.Contains("ENCRYPTED RSA PRIVATE KEY"))
             {
                 if (string.IsNullOrEmpty(password))
                 {
+                    _logger.LogError("PEM private key is encrypted but no password supplied");
                     throw new ArgumentException("Private key is encrypted but password is empty", nameof(password));
                 }
                 using var cert = X509Certificate2.CreateFromEncryptedPem(pemData, pemData, password);
-                return new X509Certificate2(cert.Export(X509ContentType.Pkcs12));
+                return MakeExportable(cert);
             }
             else if (!string.IsNullOrEmpty(password))
             {
+                _logger.LogError("PEM private key is not encrypted but a password was supplied");
                 throw new ArgumentException("No encrypted private key was found, but password is specified", nameof(password));
             }
             else if (pemData.Contains("PRIVATE KEY"))
             {
                 using var cert = X509Certificate2.CreateFromPem(pemData, pemData);
-                return new X509Certificate2(cert.Export(X509ContentType.Pkcs12));
+                return MakeExportable(cert);
             }
+            _logger.LogError("PEM is lacks private key");
             throw new FormatException("Certificate data lacks a private key");
         }
 
-        public static X509Certificate2 ReadFromFile(string fileName, string? password)
+        public X509Certificate2 ReadFromFile(string fileName, string? password)
             => ReadFromPemData(File.ReadAllText(fileName), password);
+
+        public X509Certificate2 CreateOrLoadDevCert()
+            => CreateOrLoadDevCert(out _);
+
+        public X509Certificate2 CreateOrLoadDevCert(out bool created)
+        {
+            var certFile = Path.Combine(AppContext.BaseDirectory, "server.crt");
+            if (File.Exists(certFile))
+            {
+                created = false;
+                _logger.LogInformation("Reusing existing developer certificate");
+                return X509Certificate2.CreateFromPemFile(certFile, certFile);
+            }
+            _logger.LogInformation("Creating developer certificate valid for one year");
+            var names = new string[] {
+                "localhost",
+                IPAddress.IPv6Loopback.ToString(),
+                IPAddress.Loopback.ToString(),
+                Dns.GetHostName() ?? Environment.MachineName
+            };
+            var cert = CreateCertificate("Gemini developer certificate", names, DateTime.Today.AddYears(1));
+
+            File.WriteAllText(certFile, Export(cert));
+            created = true;
+            return cert;
+        }
+
+        #region Windows Hacks
+
+        private static X509Certificate2 MakeExportable(X509Certificate2 cert)
+        {
+            return new X509Certificate2(cert.Export(X509ContentType.Pkcs12), (string?)null, X509KeyStorageFlags.Exportable);
+        }
 
         private static AsymmetricAlgorithm MakeExportable(AsymmetricAlgorithm key)
         {
@@ -231,5 +335,7 @@ namespace Gemini.Lib
             var exportParams = tmp.ExportParameters(true);
             return ECDiffieHellman.Create(exportParams);
         }
+
+        #endregion
     }
 }
