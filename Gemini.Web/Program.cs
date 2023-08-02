@@ -25,7 +25,7 @@ builder.Services.AddCors(options =>
 
 //Autoregister services
 AutoDIExtensions.DebugLogging = builder.Environment.IsDevelopment();
-builder.Services.AutoRegisterCurrentAssembly();
+builder.Services.AutoRegisterAllAssemblies();
 
 //Add Swagger
 builder.Services.AddSwaggerGen(options =>

@@ -1,4 +1,5 @@
 ﻿using AyrA.AutoDI;
+using Gemini.Lib.Services;
 using Gemini.Web.Models;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -13,11 +14,13 @@ namespace Gemini.Web.Services
     {
         private readonly List<CertificateInfo> _issuedInstances = new();
         private readonly string certDir;
+        private readonly CertificateService _certService;
 
-        public CertificateProviderService()
+        public CertificateProviderService(CertificateService certService)
         {
             certDir = Path.Combine(AppContext.BaseDirectory, "Cert");
             Directory.CreateDirectory(certDir);
+            _certService = certService;
         }
 
         public string[] GetCertificateNames()
@@ -51,7 +54,8 @@ namespace Gemini.Web.Services
         {
             CheckId(id);
             var p = Path.Combine(certDir, id + ".pem");
-            var ci = new CertificateInfo(p, password);
+            var cert = _certService.ReadFromFile(p, password);
+            var ci = new CertificateInfo(cert, !string.IsNullOrEmpty(password));
             lock (_issuedInstances)
             {
                 _issuedInstances.Add(ci);
@@ -61,7 +65,8 @@ namespace Gemini.Web.Services
 
         public CertificateInfo CreateNew(string name, string? password, DateTime expiration)
         {
-            var ci = CertificateInfo.Create(name, expiration);
+            var cert = _certService.CreateCertificate(name, null, expiration);
+            var ci = new CertificateInfo(cert, !string.IsNullOrEmpty(password));
             lock (_issuedInstances)
             {
                 _issuedInstances.Add(ci);
@@ -73,9 +78,19 @@ namespace Gemini.Web.Services
         public CertificateInfo Update(string id, string newName, string? password, DateTime expiration)
         {
             CheckId(id);
-            var pOld = Path.Combine(certDir, id + ".pem");
-            var ci = new CertificateInfo(pOld, password);
-            var newCert = ci.Update(newName, expiration);
+            var p = Path.Combine(certDir, id + ".pem");
+            using var oldCert = _certService.ReadFromFile(p, password);
+            var key = oldCert.GetECDsaPrivateKey() ?? throw new Exception("Cannot load key from file");
+            var createDate = DateTime.UtcNow.Date;
+            createDate = createDate.AddDays(-(createDate.Day - 1));
+
+            var cert = _certService.CreateFromKey(newName, null, createDate, expiration, key);
+
+            var newCert = new CertificateInfo(cert, !string.IsNullOrEmpty(password));
+            lock (_issuedInstances)
+            {
+                _issuedInstances.Add(newCert);
+            }
             SaveCertificate(newCert, password);
             DeleteCertificate(id);
             return newCert;
@@ -193,7 +208,7 @@ namespace Gemini.Web.Services
         private void SaveCertificate(CertificateInfo ci, string? password)
         {
             var p = Path.Combine(certDir, ci.Id + ".pem");
-            ci.Save(p, password);
+            File.WriteAllText(p, _certService.Export(ci.GetCertificate(), password));
             ci.Encrypted = !string.IsNullOrEmpty(password);
         }
 

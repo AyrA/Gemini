@@ -28,6 +28,8 @@ namespace Gemini.Web.Controllers
             return _certificateProvider
                 .GetCertificateNames()
                 .Select(m => new CertificateInfoViewModel(_certificateProvider.GetPublicCertificate(m)))
+                .OrderBy(m => m.Name.ToLower())
+                .ThenBy(m => m.Name)
                 .ToArray();
         }
 
