@@ -37,14 +37,6 @@ internal class Program
         else
         {
             builder.UseConsoleLifetime();
-            /*
-            //Run as plain console application
-            var server = new TcpServer(IPAddress.Loopback);
-            server.Connection += GeminiRequestHandler.Tcp_Handler;
-            server.Start();
-            Debugging.DumbClient(new IPEndPoint(IPAddress.Loopback, TcpServer.DefaultPort));
-            Thread.CurrentThread.Join();
-            //*/
         }
 
         builder.ConfigureServices((context, services) =>
@@ -55,9 +47,9 @@ internal class Program
         });
 
         IHost host = builder.Build();
-        //var task1 = host.StartAsync();
-        //var task2 = host.RunAsync();
-        //await Task.WhenAll(task1, task2);
-        host.Run();
+        var logger = host.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogInformation("Initialized DI system. Starting application now");
+        await host.RunAsync();
+        logger.LogInformation("Application has shut down");
     }
 }
