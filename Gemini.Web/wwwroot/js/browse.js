@@ -400,8 +400,11 @@
             if (json.statusCode < 0) {
                 renderGemini(getUrl(), [
                     "# BACKEND ERROR",
-                    "The proxy ran into a problem when communicating with a gemini service",
-                    "Most likely cause is that the remote service is unavailable, or violating the protocol",
+                    "Your application ran into a problem when communicating with a gemini service.",
+                    "Most likely causes for this are:",
+                    "* Remote service is unavailable or overloaded",
+                    "* A client certificate was requested by the remote server but none was provided by you",
+                    "* Server is violating the protocol",
                     "## Details",
                     json.contentType === contentType.bytes ? window.atob(json.content) : json.content
                 ].join("\r\n"));

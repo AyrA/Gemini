@@ -21,6 +21,7 @@ namespace Gemini.Server
         private readonly Type[] _hostTypes;
 
         public X509Certificate2? ServerCertificate { get; set; }
+        public bool RequireClientCertificate { get; set; }
 
         public GeminiRequestHandler(ILogger<GeminiRequestHandler> logger, CertificateService certificateService, IServiceProvider serverProvider, IServiceCollection services)
         {
@@ -47,6 +48,7 @@ namespace Gemini.Server
                 ServerCertificate = _certificateService.CreateOrLoadDevCert();
             }
             using var tls = _serverProvider.GetRequiredService<TlsServer>();
+            tls.RequireClientCertificate = RequireClientCertificate;
             tls.SetConnection(client);
             _logger.LogDebug("Trying TLS server auth with {address}...", remoteAddress);
             try

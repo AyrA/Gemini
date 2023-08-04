@@ -1,6 +1,7 @@
 [
     {
-        "Listen": "127.0.0.1:1965"
+        "Listen": "127.0.0.1:1965",
+        "RequireClientCertificate": true
     },
     {
         "Listen": "[::1]:1965"

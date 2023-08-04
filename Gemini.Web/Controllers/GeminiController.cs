@@ -4,8 +4,10 @@ using Gemini.Web.Models;
 using Gemini.Web.Services;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using System.Data;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Gemini.Web.Controllers
 {
@@ -65,7 +67,7 @@ namespace Gemini.Web.Controllers
                 content = new GeminiResponseModel(GeminiResponseModel.InternalErrors.GenericError,
                     "PROTOCOL VIOLATION")
                 {
-                    Content = CombineExceptionMessages(ex)
+                    Content = $"## Connection status:\r\n{_geminiService.CurrentState}\r\n" + CombineExceptionMessages(ex)
                 };
             }
             return content;
@@ -157,15 +159,55 @@ namespace Gemini.Web.Controllers
             }
         }
 
-        private static string CombineExceptionMessages(Exception? ex)
+        /// <summary>
+        /// Render an exception as gemini text
+        /// </summary>
+        /// <param name="error">Exception</param>
+        /// <returns>Gemini text</returns>
+        private static string CombineExceptionMessages(Exception? error)
         {
-            var msg = new List<string>();
-            while (ex != null)
+            if (error == null)
             {
-                msg.Add(ex.Message);
-                ex = ex.InnerException;
+                return "### Unknown error";
+            }
+            var msg = new List<string>();
+            var stack = new Stack<Exception>();
+            stack.Push(error);
+            while (stack.Count > 0)
+            {
+                var ex = stack.Pop();
+                msg.Add(string.Format("### [{0}]: {1}", ex.GetType().Name, ex.Message));
+                msg.AddRange(GetCodeLinesFromStack(ex.StackTrace));
+                if (ex is AggregateException aex)
+                {
+                    foreach (var iex in aex.InnerExceptions)
+                    {
+                        stack.Push(iex);
+                    }
+                }
+                else if (ex.InnerException != null)
+                {
+                    stack.Push(ex.InnerException);
+                }
             }
             return string.Join("\r\n", msg);
+        }
+
+        private static IEnumerable<string> GetCodeLinesFromStack(string? stack)
+        {
+            var r = new Regex(@"at\s+(.+)\s+in\s+(.+):line\s+(\d+)");
+            if (!string.IsNullOrWhiteSpace(stack))
+            {
+                foreach (var line in stack.Split('\n').Select(m => r.Match(m.Trim())).Where(m => m.Success))
+                {
+                    yield return "* Method: " + line.Groups[1].Value;
+                    yield return "* File: " + line.Groups[2].Value;
+                    yield return "* Line: " + line.Groups[3].Value;
+                    yield return "-----";
+                    //yield return string.Format("Method: {0} | File: {1} | Line: {2}",
+                    //    line.Groups[1].Value, line.Groups[2].Value, line.Groups[3].Value);
+                }
+            }
         }
     }
 }

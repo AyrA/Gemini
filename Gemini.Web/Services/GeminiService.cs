@@ -11,8 +11,55 @@ namespace Gemini.Web.Services
     [AutoDIRegister(AutoDIType.Transient)]
     public class GeminiService
     {
+        /// <summary>
+        /// State of a gemini service instance
+        /// </summary>
+        public enum RequestState
+        {
+            /// <summary>
+            /// No request is currently performed
+            /// </summary>
+            Idle,
+            /// <summary>
+            /// Trying to connect to a server
+            /// </summary>
+            Connecting,
+            /// <summary>
+            /// Server is connected, trying to create SSL connection
+            /// </summary>
+            InitiatingSsl,
+            /// <summary>
+            /// Client is checking the server certificate
+            /// </summary>
+            CheckingServerCertificate,
+            /// <summary>
+            /// Client is performing client authentication, possibly with a client certificate
+            /// </summary>
+            ClientAuthentication,
+            /// <summary>
+            /// Client is sending a gemini request
+            /// </summary>
+            SendingRequest,
+            /// <summary>
+            /// Client is reading a gemini response
+            /// </summary>
+            ReadingStatus,
+            /// <summary>
+            /// Client is reading gemini content
+            /// </summary>
+            ReadingContent
+        }
+
         private const string CRLF = "\r\n";
         public const int DefaultPort = 1965;
+
+        /// <summary>
+        /// Gets the state of the gemini instance.
+        /// This can be used to determine where in the request the client is,
+        /// and to provide more accurate error responses to the client,
+        /// should an exception be thrown.
+        /// </summary>
+        public RequestState CurrentState { get; private set; } = RequestState.Idle;
 
         private readonly ILogger<GeminiService> _logger;
         private readonly ServerIdentityService _serverIdentity;
@@ -38,6 +85,7 @@ namespace Gemini.Web.Services
             }
 
             _logger.LogInformation("Requesting {url}", url);
+            CurrentState = RequestState.Connecting;
 
             using var client = new TcpClient();
             try
@@ -58,6 +106,7 @@ namespace Gemini.Web.Services
 
             bool RemoteCallback(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
             {
+                CurrentState = RequestState.CheckingServerCertificate;
                 _logger.LogInformation("Server cert validation result: {policy}", sslPolicyErrors);
                 if (certificate == null)
                 {
@@ -76,14 +125,15 @@ namespace Gemini.Web.Services
             }
             X509Certificate clientCertSelect(object sender, string targetHost, X509CertificateCollection localCertificates, X509Certificate? remoteCertificate, string[] acceptableIssuers)
             {
+                CurrentState = RequestState.ClientAuthentication;
                 if (clientCertificate != null)
                 {
                     _logger.LogInformation("Performing client SSL authentication");
                 }
-                //Windows fix
+                //Windows fix: we cannot use clientCertificate directly
                 return localCertificates[0];
             }
-
+            CurrentState = RequestState.InitiatingSsl;
             var hasCert = clientCertificate != null;
             using var ssl = new SslStream(client.GetStream(), false);
 
@@ -103,31 +153,44 @@ namespace Gemini.Web.Services
                 if (!ssl.IsAuthenticated)
                 {
                     _logger.LogWarning("SSL authentication failed for {host}", host);
-                    throw new Exception($"SSL authentication failed for {host}");
+                    throw new SslException($"SSL authentication failed for {host}");
                 }
+            }
+            catch (SslException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SSL connection failed: {msg}", ex.Message);
-                throw;
+                _logger.LogError(ex, "SSL authentication failed: {msg}", ex.Message);
+                if (clientCertificate != null)
+                {
+                    throw new SslException($"Failed to perform SSL authentication. Most likely cause is that your certificate '{clientCertificate.Subject}' was rejected by the server.", ex);
+                }
+                throw new SslException("Failed to perform SSL authentication. Most likely cause is that the server demands a certificate, but is not sending a 6x gemini error code, but closes the connection.", ex);
             }
+            CurrentState = RequestState.SendingRequest;
             await ssl.WriteAsync(Encoding.UTF8.GetBytes(url.ToString() + CRLF));
             await ssl.FlushAsync();
+            CurrentState = RequestState.ReadingStatus;
             var status = GetStatusLine(ssl);
 
             _logger.LogInformation("Status: {code}; Meta: {meta}", status.StatusCode, status.Meta);
 
             if (!status.IsSuccess)
             {
+                CurrentState = RequestState.Idle;
                 //Stop processing here.
                 //No content is expected if it's not a success code
                 return status;
             }
+            CurrentState = RequestState.ReadingContent;
             //On success, read body into response
             var data = await ReadToEndAsync(ssl);
             status.Content = status.MimeInformation?.Encoding != null
                 ? status.MimeInformation.Encoding.GetString(data)
                 : data;
+            CurrentState = RequestState.Idle;
             return status;
         }
 

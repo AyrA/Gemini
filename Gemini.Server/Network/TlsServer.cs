@@ -139,6 +139,10 @@ namespace Gemini.Server.Network
             {
                 _logger.LogInformation("Got client certificate: {subject}", ClientCertificate.Subject);
             }
+            else if (RequireClientCertificate && certificate == null)
+            {
+                _logger.LogInformation("Client certificate is required for this listener, but none was provided");
+            }
             return certificate != null || !RequireClientCertificate;
         }
     }

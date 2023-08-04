@@ -27,7 +27,7 @@ namespace Gemini.Server
         private class ListenerConfig : IDisposable
         {
             public string? Listen { get; set; }
-
+            public bool RequireClientCertificate { get; set; }
             public string? Certificate { get; set; }
 
             [JsonIgnore]
@@ -81,6 +81,7 @@ namespace Gemini.Server
                 {
                     throw new InvalidOperationException("Request handler has not been assigned");
                 }
+                Handler.RequireClientCertificate = RequireClientCertificate;
                 Server.Start();
             }
 
