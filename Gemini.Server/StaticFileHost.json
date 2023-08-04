@@ -1,9 +1,7 @@
 [
     {
-        "Hosts": [ "*" ],
+        "Hosts": ["*"],
         "RootDirectory": "C:\\Temp",
-        "AllowDirectoryBrowsing": true,
-        "RemoteRanges": [ "127.0.0.0/8", "::1" ],
-        "Thumbprints": [ "A5D06078DDA2F027F1791C8284CA2AEAE510F737" ]
+        "AllowDirectoryBrowsing": true
     }
 ]
