@@ -1,63 +1,72 @@
-﻿using Microsoft.Extensions.Logging;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
+﻿using AyrA.AutoDI;
+using Gemini.Lib;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Gemini.Server
 {
+    [AutoDIRegister(AutoDIType.Singleton)]
     public class Tools
     {
-        private static readonly ILoggerFactory loggerFactory;
-        private static readonly ILogger logger;
+        private readonly IServiceProvider _provider;
+        private readonly IServiceCollection _collection;
+        private readonly ILogger<Tools> _logger;
 
-        static Tools()
+        public Tools(IServiceProvider provider, IServiceCollection collection, ILogger<Tools> logger)
         {
-            //This is how you get access to a logger without all the DI nonsense
-            loggerFactory = LoggerFactory.Create(builder =>
+            _provider = provider;
+            _collection = collection;
+            _logger = logger;
+        }
+
+        public static bool IsGeminiHost(ServiceDescriptor descriptor)
+        {
+            return descriptor.ServiceType.IsSubclassOf(typeof(GeminiHost));
+        }
+
+        public static Type[] GetHosts(IServiceCollection collection)
+        {
+            return collection
+                .Where(IsGeminiHost)
+                .Select(m => m.ServiceType)
+                .Distinct()
+                .ToArray();
+        }
+
+        public async Task StartHosts()
+        {
+            using var scope = _provider.CreateAsyncScope();
+            var hosts = GetHosts(_collection).Select(m => (GeminiHost)_provider.GetRequiredService(m));
+            await Parallel.ForEachAsync(hosts, (host, token) =>
             {
-#if DEBUG
-                builder.SetMinimumLevel(LogLevel.Debug);
-#endif
-                builder.AddConsole();
+                try
+                {
+                    host.Start();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Host {type} failed to start", host.GetType());
+                }
+                return ValueTask.CompletedTask;
             });
-            logger = loggerFactory.CreateLogger<Tools>();
         }
 
-        public static ILogger<T> GetLogger<T>()
+        public async Task StopHosts()
         {
-            return loggerFactory.CreateLogger<T>();
-        }
-
-        public static X509Certificate2 CreateOrLoadDevCert()
-        {
-            var certFile = Path.Combine(AppContext.BaseDirectory, "server.crt");
-            if (File.Exists(certFile))
+            using var scope = _provider.CreateAsyncScope();
+            var hosts = GetHosts(_collection).Select(m => (GeminiHost)_provider.GetRequiredService(m));
+            await Parallel.ForEachAsync(hosts, (host, token) =>
             {
-                logger.LogInformation("Reusing existing developer certificate");
-                return X509Certificate2.CreateFromPemFile(certFile, certFile);
-            }
-            logger.LogInformation("Creating developer certificate valid for one year");
-            var req = new CertificateRequest(
-                "CN=localhost, OU=Gemini.Server, O=https://github.com/AyrA/Gemini",
-                RSA.Create(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            var cert = req.CreateSelfSigned(DateTime.Today, DateTime.Today.AddYears(1));
-
-            byte[] certificateBytes = cert.RawData;
-            char[] certificatePem = PemEncoding.Write("CERTIFICATE", certificateBytes);
-
-            AsymmetricAlgorithm key = cert.GetRSAPrivateKey()
-                ?? (AsymmetricAlgorithm?)cert.GetDSAPrivateKey()
-                ?? (AsymmetricAlgorithm?)cert.GetECDsaPrivateKey()
-                ?? (AsymmetricAlgorithm?)cert.GetECDiffieHellmanPrivateKey()
-                ?? throw null!;
-            byte[] pubKeyBytes = key.ExportSubjectPublicKeyInfo();
-            byte[] privKeyBytes = key.ExportPkcs8PrivateKey();
-            char[] pubKeyPem = PemEncoding.Write("PUBLIC KEY", pubKeyBytes);
-            char[] privKeyPem = PemEncoding.Write("PRIVATE KEY", privKeyBytes);
-            using var sw = File.CreateText(certFile);
-            sw.WriteLine(certificatePem);
-            sw.WriteLine(pubKeyPem);
-            sw.WriteLine(privKeyPem);
-            return cert;
+                try
+                {
+                    host.Stop();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Host {type} failed to stop", host.GetType());
+                }
+                return ValueTask.CompletedTask;
+            });
         }
     }
 }

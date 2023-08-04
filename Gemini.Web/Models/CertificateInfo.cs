@@ -1,5 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 
 namespace Gemini.Web.Models
 {
@@ -40,12 +39,6 @@ namespace Gemini.Web.Models
         /// <param name="cert">Certificate</param>
         /// <returns>Certificate info</returns>
         public static CertificateInfo Import(X509Certificate2 cert) => new(cert);
-
-        private static X509Certificate2 GetCert(string name, ECDsa key, DateTime created, DateTime expires)
-        {
-            var req = new CertificateRequest($"CN={name}, OU=Gemini.Web, O=https://github.com/AyrA/Gemini", key, HashAlgorithmName.SHA256);
-            return req.CreateSelfSigned(created, expires);
-        }
 
         public X509Certificate2 GetCertificate()
         {

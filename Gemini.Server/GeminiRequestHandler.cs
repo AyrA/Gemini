@@ -1,5 +1,8 @@
-﻿using Gemini.Lib;
+﻿using AyrA.AutoDI;
+using Gemini.Lib;
+using Gemini.Lib.Services;
 using Gemini.Server.Network;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Sockets;
@@ -9,34 +12,56 @@ using System.Text.RegularExpressions;
 
 namespace Gemini.Server
 {
+    [AutoDIRegister(AutoDIType.Transient)]
     public class GeminiRequestHandler
     {
-        private static readonly ILogger logger = Tools.GetLogger<GeminiRequestHandler>();
-        public static X509Certificate2? ServerCertificate { get; set; }
+        private readonly ILogger<GeminiRequestHandler> _logger;
+        private readonly CertificateService _certificateService;
+        private readonly IServiceProvider _serverProvider;
+        private readonly Type[] _hostTypes;
 
-        public static void Tcp_Handler(object sender, Socket client, IPEndPoint remoteAddress)
+        public X509Certificate2? ServerCertificate { get; set; }
+
+        public GeminiRequestHandler(ILogger<GeminiRequestHandler> logger, CertificateService certificateService, IServiceProvider serverProvider, IServiceCollection services)
         {
-            logger.LogInformation("Got connection from {address}", remoteAddress);
+            _logger = logger;
+            _certificateService = certificateService;
+            _serverProvider = serverProvider;
+            _hostTypes = Tools.GetHosts(services);
+        }
+
+        public void UseDeveloperCertificate()
+        {
+            ServerCertificate = _certificateService.CreateOrLoadDevCert();
+        }
+
+        public void TcpServerEventHandler(object sender, Socket client, IPEndPoint remoteAddress)
+            => HandleTcpConnection(client, remoteAddress);
+
+        public void HandleTcpConnection(Socket client, IPEndPoint remoteAddress)
+        {
+            _logger.LogInformation("Got connection from {address}", remoteAddress);
             if (ServerCertificate == null)
             {
-                logger.LogWarning("No server certificate was specified. Creating development certificate");
-                ServerCertificate = Tools.CreateOrLoadDevCert();
+                _logger.LogWarning("No server certificate was specified. Creating development certificate");
+                ServerCertificate = _certificateService.CreateOrLoadDevCert();
             }
-            using var tls = new TlsServer(client);
-            logger.LogDebug("Trying TLS server auth with {address}...", remoteAddress);
+            using var tls = _serverProvider.GetRequiredService<TlsServer>();
+            tls.SetConnection(client);
+            _logger.LogDebug("Trying TLS server auth with {address}...", remoteAddress);
             try
             {
                 tls.ServerAuth(ServerCertificate);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "TLS authentication failed with {address}", remoteAddress);
+                _logger.LogError(ex, "TLS authentication failed with {address}", remoteAddress);
                 return;
             }
-            logger.LogInformation("TLS auth Ok. Client certificate: {subject}", tls.ClientCertificate?.Subject ?? "<none>");
-            using var authStream = tls.GetStream();
+            _logger.LogInformation("TLS auth Ok. Client certificate: {subject}", tls.ClientCertificate?.Subject ?? "<none>");
+            using var authStream = tls.GetStream() ?? throw null!;
 
-            logger.LogDebug("Reading request...");
+            _logger.LogDebug("Reading request...");
             Uri? url = null;
             try
             {
@@ -44,7 +69,7 @@ namespace Gemini.Server
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Request parsing failed for {address}", remoteAddress);
+                _logger.LogError(ex, "Request parsing failed for {address}", remoteAddress);
                 try
                 {
                     using var br = GeminiResponse.BadRequest("Cannot parse request into a gemini URL");
@@ -52,19 +77,19 @@ namespace Gemini.Server
                 }
                 catch (Exception exSendErr)
                 {
-                    logger.LogError(exSendErr, "Sending error response to {address} failed", remoteAddress);
+                    _logger.LogError(exSendErr, "Sending error response to {address} failed", remoteAddress);
                 }
             }
 
             if (url != null)
             {
                 GeminiResponse? response = null;
-                var hosts = GeminiHostScanner.Hosts;
-                logger.LogInformation("Request URL from {address}: {url}", remoteAddress, url);
-                for (var i = 0; i < hosts.Length && response == null; i++)
+                _logger.LogInformation("Request URL from {address}: {url}", remoteAddress, url);
+                using var scope = _serverProvider.CreateScope();
+                for (var i = 0; i < _hostTypes.Length && response == null; i++)
                 {
-                    logger.LogDebug("Checking host {index}/{count}", i + 1, hosts.Length);
-                    var host = hosts[i];
+                    _logger.LogDebug("Checking host {index}/{count}", i + 1, _hostTypes.Length);
+                    var host = (GeminiHost)_serverProvider.GetRequiredService(_hostTypes[i]);
                     var hostname = host.GetType().FullName;
                     bool accepted = false;
                     try
@@ -72,12 +97,12 @@ namespace Gemini.Server
                         accepted = host.IsAccepted(url, remoteAddress.Address, tls.ClientCertificate);
                         if (!accepted)
                         {
-                            logger.LogDebug("Host rejected request");
+                            _logger.LogDebug("Host rejected request");
                         }
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, "Host function of {host} .IsAccepted(...) failed", hostname);
+                        _logger.LogError(ex, "Host function of {host} .IsAccepted(...) failed", hostname);
                     }
                     try
                     {
@@ -86,7 +111,7 @@ namespace Gemini.Server
                             url = host.Rewrite(url, remoteAddress.Address, tls.ClientCertificate);
                             if (url == null)
                             {
-                                logger.LogInformation("{host} set the url to null", hostname);
+                                _logger.LogInformation("{host} set the url to null", hostname);
                                 return;
                             }
                             response = host.Request(url, remoteAddress, tls.ClientCertificate).Result;
@@ -94,30 +119,30 @@ namespace Gemini.Server
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, "Request processing of {host} for {address} failed", hostname, remoteAddress);
+                        _logger.LogError(ex, "Request processing of {host} for {address} failed", hostname, remoteAddress);
                         using var se = new GeminiResponse(StatusCode.CgiError, null, ex.Message);
                         try
                         {
                             se.SendTo(authStream);
-                            logger.LogInformation("Response: {code} {status}", (int)se.StatusCode, se.Status);
+                            _logger.LogInformation("Response: {code} {status}", (int)se.StatusCode, se.Status);
                         }
                         catch (Exception exErr)
                         {
-                            logger.LogWarning(exErr, "Unable to send error response to {address}", remoteAddress);
+                            _logger.LogWarning(exErr, "Unable to send error response to {address}", remoteAddress);
                         }
                     }
                     if (response != null)
                     {
                         using (response)
                         {
-                            logger.LogInformation("Response: {code} {status}", (int)response.StatusCode, response.Status);
+                            _logger.LogInformation("Response: {code} {status}", (int)response.StatusCode, response.Status);
                             try
                             {
                                 response.SendTo(authStream);
                             }
                             catch (Exception ex)
                             {
-                                logger.LogError(ex, "Failed to send response data to {address}", remoteAddress);
+                                _logger.LogError(ex, "Failed to send response data to {address}", remoteAddress);
                             }
                         }
                         //Stop processing
@@ -125,7 +150,7 @@ namespace Gemini.Server
                     }
                 }
                 //No host accepted the request
-                logger.LogInformation("No response from any host. Sending default 'not found' to {address}", remoteAddress);
+                _logger.LogInformation("No response from any host. Sending default 'not found' to {address}", remoteAddress);
                 try
                 {
                     using var g404 = GeminiResponse.NotFound();
@@ -133,7 +158,7 @@ namespace Gemini.Server
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(ex, "Unable to send error response to {address}", remoteAddress);
+                    _logger.LogWarning(ex, "Unable to send error response to {address}", remoteAddress);
                 }
             }
         }
@@ -183,5 +208,6 @@ namespace Gemini.Server
             }
             return new Uri(url);
         }
+
     }
 }

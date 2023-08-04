@@ -1,5 +1,7 @@
-﻿using Gemini.Lib;
+﻿using AyrA.AutoDI;
+using Gemini.Lib;
 using Gemini.Lib.Network;
+using Gemini.Lib.Services;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -8,6 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace Gemini.Server.Network
 {
+    [AutoDIRegister(AutoDIType.Singleton)]
     public class StaticFileHost : GeminiHost
     {
         private class StaticFileHostConfig
@@ -54,7 +57,7 @@ namespace Gemini.Server.Network
                 }
                 set
                 {
-                    if (value.Length > 0 && !value.All(Certificates.IsValidThumbprint))
+                    if (value.Length > 0 && !value.All(CertificateService.IsValidThumbprint))
                     {
                         throw new ArgumentException("Invalid thumbprints in array");
                     }
@@ -97,7 +100,6 @@ namespace Gemini.Server.Network
                 }
                 if (!IsValidHostSpec(host))
                 {
-                    logger.LogError("Invalid host spec: {host}", host);
                     throw new ArgumentException($"'{nameof(host)}' cannot be null or whitespace.", nameof(host));
                 }
                 //Normalize the host name and then check
@@ -146,7 +148,6 @@ namespace Gemini.Server.Network
 
             public bool IsAcceptedRemoteAddress(IPAddress address)
             {
-                logger.LogDebug("Checking {ip} for access rights", address);
                 if (ipRanges == null || ipRanges.Length == 0)
                 {
                     return true;
@@ -176,7 +177,6 @@ namespace Gemini.Server.Network
             {
                 if (string.IsNullOrWhiteSpace(host))
                 {
-                    logger.LogWarning("Invalid host spec. IsNullOrWhiteSpace");
                     return host;
                 }
                 if (host == "*" || host == "*:*")
@@ -185,10 +185,6 @@ namespace Gemini.Server.Network
                 }
                 if (Regex.IsMatch(host, @"^\*:\d+$"))
                 {
-                    if (!ushort.TryParse(host.Split(':').Last(), out _))
-                    {
-                        logger.LogWarning("Invalid port of host spec {host}. Neither valid TCP port nor a sole asterisk", host);
-                    }
                     return host;
                 }
 
@@ -196,13 +192,10 @@ namespace Gemini.Server.Network
                 {
                     case UriHostNameType.Basic:
                     case UriHostNameType.Dns:
-                        logger.LogDebug("Parsed dns host");
                         return host.ToLower() + ":*";
                     case UriHostNameType.IPv4:
-                        logger.LogDebug("Parsed IPv4 address as host");
                         return $"{IPAddress.Parse(host)}:*";
                     case UriHostNameType.IPv6:
-                        logger.LogDebug("Parsed IPv6 address as host");
                         return $"[{IPAddress.Parse(host)}]:*";
                 }
 
@@ -218,14 +211,12 @@ namespace Gemini.Server.Network
                 //Invalid host. Return as-is
                 if (!match.Success)
                 {
-                    logger.LogWarning("Invalid host spec: {host}", host);
                     return host;
                 }
                 //Check port
                 var port = match.Groups[2].Value;
                 if (port != "*" && !ushort.TryParse(port, out _))
                 {
-                    logger.LogWarning("Invalid port of host spec {host}. Neither valid TCP port nor a sole asterisk", host);
                     return host;
                 }
 
@@ -233,67 +224,73 @@ namespace Gemini.Server.Network
             }
         }
 
-        private readonly StaticFileHostConfig[] _config;
+        private readonly List<StaticFileHostConfig> _config = new();
+        private readonly ILogger<StaticFileHost> _logger;
 
-        private static readonly ILogger logger = Tools.GetLogger<StaticFileHost>();
-
-        public StaticFileHost()
+        public StaticFileHost(ILogger<StaticFileHost> logger)
         {
+            _logger = logger;
+        }
+
+        public override void Start()
+        {
+            _logger.LogInformation("Starting host and loading configuration");
             var jsonFile = Path.Combine(AppContext.BaseDirectory, $"{nameof(StaticFileHost)}.json");
+            List<StaticFileHostConfig>? newSettings;
             if (File.Exists(jsonFile))
             {
                 try
                 {
-                    _config = File.ReadAllText(jsonFile).FromJson<StaticFileHostConfig[]>()
+                    newSettings = File.ReadAllText(jsonFile).FromJson<List<StaticFileHostConfig>>()
                         ?? throw new Exception("Deserialized configuration is null");
-                    if (_config.Length == 0)
+                    if (newSettings.Count == 0)
                     {
                         throw new Exception("Deserialized configuration is empty");
                     }
-                    foreach (var c in _config)
+                    foreach (var c in newSettings)
                     {
-                        logger.LogDebug("Validating Configuration");
+                        _logger.LogDebug("Validating Configuration");
                         c.Validate();
                     }
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Unable to deserialize configuration");
+                    _logger.LogError(ex, "Unable to deserialize configuration");
                     throw;
                 }
             }
             else
             {
-                logger.LogWarning("Cannot find configuration: {file}. Creating a default listener instead", jsonFile);
-                _config = new StaticFileHostConfig[]
+                var host = new StaticFileHostConfig()
                 {
-                    new StaticFileHostConfig()
-                    {
-                        RootDirectory = Path.Combine(AppContext.BaseDirectory, "StaticFileHost"),
-                        Hosts = new string[]{ "*" },
-                        AllowDirectoryBrowsing = false
-                    }
+                    RootDirectory = Path.Combine(AppContext.BaseDirectory, "StaticFileHost"),
+                    Hosts = new string[] { "*" },
+                    AllowDirectoryBrowsing = false
                 };
-                _config[0].Validate();
+                _logger.LogWarning("Cannot find configuration: {file}. Creating a global listener for files in {path} instead", jsonFile, host.RootDirectory);
+                newSettings = new() { host };
+                newSettings[0].Validate();
             }
+            if (newSettings != null)
+            {
+                _config.Clear();
+                _config.AddRange(newSettings);
+            }
+            base.Start();
         }
 
-        public StaticFileHost(string rootDir, bool enableDirectoryBrowsing, string host = "*")
+        public override void Stop()
         {
-            _config = new StaticFileHostConfig[]
-            {
-                new StaticFileHostConfig()
-                {
-                    RootDirectory = Path.GetFullPath(rootDir),
-                    Hosts = new string[]{ host },
-                    AllowDirectoryBrowsing = enableDirectoryBrowsing
-                }
-            };
-            _config[0].Validate();
+            _config.Clear();
+            base.Stop();
         }
 
         public override async Task<GeminiResponse?> Request(Uri url, IPEndPoint client, X509Certificate? cert)
         {
+            if (_config.Count == 0)
+            {
+                return null;
+            }
             var host = GetHostConfig(url)
                 ?? throw new InvalidOperationException(
                     $"This {nameof(StaticFileHost)} does not accept requests for {url.Host}");
@@ -303,14 +300,14 @@ namespace Gemini.Server.Network
 
             if (!host.IsAcceptedCertificate(cert))
             {
-                logger.LogWarning("Certificate was not accepted");
+                _logger.LogWarning("Certificate was not accepted");
                 return await Task.FromResult(GeminiResponse.CertificateRequired());
             }
 
             var p = Path.GetFullPath(Path.Combine(_root, url.LocalPath[1..])).TrimEnd(Path.DirectorySeparatorChar);
             if (p != _root && !p.StartsWith(_root + Path.DirectorySeparatorChar))
             {
-                logger.LogWarning("Possible path traversal attack by {ip}: Path mapped to {path}, which is outside of {root}", client, p, _root);
+                _logger.LogWarning("Possible path traversal attack by {ip}: Path mapped to {path}, which is outside of {root}", client, p, _root);
                 return await Task.FromResult(GeminiResponse.BadRequest());
             }
             if (Directory.Exists(p))
@@ -324,7 +321,7 @@ namespace Gemini.Server.Network
                         return GeminiResponse.Redirect(url.LocalPath + "/");
                     }
 
-                    logger.LogInformation("Building directory listing of {path} for {client}", p, client);
+                    _logger.LogInformation("Building directory listing of {path} for {client}", p, client);
 
                     var sb = new StringBuilder();
                     sb.AppendLine($"# Directory Listing of {url.LocalPath}");
@@ -352,7 +349,7 @@ namespace Gemini.Server.Network
             }
             if (File.Exists(p))
             {
-                logger.LogInformation("Sending file {file} to {client}", p, client);
+                _logger.LogInformation("Sending file {file} to {client}", p, client);
                 return await Task.FromResult(GeminiResponse.File(p));
             }
             return await Task.FromResult(GeminiResponse.NotFound());
@@ -360,6 +357,10 @@ namespace Gemini.Server.Network
 
         public override bool IsAccepted(Uri _1, IPAddress _2, X509Certificate? _3)
         {
+            if (_config.Count == 0)
+            {
+                return false;
+            }
             var host = GetHostConfig(_1);
             if (host == null)
             {
@@ -377,14 +378,14 @@ namespace Gemini.Server.Network
             {
                 throw new ArgumentException($"'{nameof(host)}' cannot be null or whitespace.", nameof(host));
             }
-            logger.LogDebug("Getting config for {host}", host);
+            _logger.LogDebug("Getting config for {host}", host);
             return _config.FirstOrDefault(m => m.IsMatch(host));
         }
 
 #if DEBUG
         public void RegisterThumbprint(string thumbprint)
         {
-            logger.LogDebug("Registering {thumb} with host instance", thumbprint);
+            _logger.LogDebug("Registering {thumb} with host instance at runtime", thumbprint);
             foreach (var config in _config)
             {
                 config.Thumbprints = config.Thumbprints.Concat(new[] { thumbprint }).ToArray();

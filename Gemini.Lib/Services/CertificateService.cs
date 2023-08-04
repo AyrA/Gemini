@@ -170,7 +170,17 @@ namespace Gemini.Lib.Services
                         _logger.LogWarning("SAN list has empty/whitespace entry. Skipping it");
                         continue;
                     }
-                    if (IPAddress.TryParse(entry, out var ip))
+                    else if (entry.StartsWith("*.") && Uri.CheckHostName(entry[2..]) == UriHostNameType.Dns)
+                    {
+                        sanBuilder.AddDnsName(entry);
+                        ++proc;
+                    }
+                    else if (entry.StartsWith("*.") && Uri.CheckHostName(entry[2..]) == UriHostNameType.Basic)
+                    {
+                        sanBuilder.AddDnsName(entry);
+                        ++proc;
+                    }
+                    else if (IPAddress.TryParse(entry, out var ip))
                     {
                         sanBuilder.AddIpAddress(ip);
                         ++proc;
@@ -242,25 +252,79 @@ namespace Gemini.Lib.Services
 
         public X509Certificate2 CreateOrLoadDevCert(out bool created)
         {
+            X509Certificate2? cert;
             var certFile = Path.Combine(AppContext.BaseDirectory, "server.crt");
             if (File.Exists(certFile))
             {
-                created = false;
-                _logger.LogInformation("Reusing existing developer certificate");
-                return X509Certificate2.CreateFromPemFile(certFile, certFile);
+                using (cert = X509Certificate2.CreateFromPemFile(certFile, certFile))
+                {
+                    var thirdDuration = cert.NotAfter.Subtract(cert.NotBefore).Ticks / 3;
+                    if (cert.NotAfter.ToUniversalTime().AddTicks(-thirdDuration) >= DateTime.UtcNow)
+                    {
+                        created = false;
+                        _logger.LogInformation("Reusing existing developer certificate valid until {date}", cert.NotAfter.ToUniversalTime());
+                        return MakeExportable(cert);
+                    }
+                    _logger.LogWarning("Developer certificate has expired or has less than 1/3 of its lifetime remaining. Creating a new certificate now");
+                }
             }
             _logger.LogInformation("Creating developer certificate valid for one year");
             var names = new string[] {
                 "localhost",
+                "*.localhost",
                 IPAddress.IPv6Loopback.ToString(),
                 IPAddress.Loopback.ToString(),
-                Dns.GetHostName() ?? Environment.MachineName
+                Dns.GetHostName() ?? Environment.MachineName,
+                "*." + (Dns.GetHostName() ?? Environment.MachineName)
             };
-            var cert = CreateCertificate("Gemini developer certificate", names, DateTime.Today.AddYears(1));
+            using (cert = CreateCertificate("Gemini developer certificate", names, DateTime.Today.AddYears(1)))
+            {
+                _logger.LogInformation("Exporting {name} to {file}", cert.Subject, certFile);
+                File.WriteAllText(certFile, Export(cert));
+                created = true;
+                return MakeExportable(cert);
+            }
+        }
 
-            File.WriteAllText(certFile, Export(cert));
-            created = true;
-            return cert;
+        public X509Certificate2 ReadFromStore(string thumbprint)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                _logger.LogError("Tried to call {func} from non-windows platform", nameof(ReadFromStore));
+                throw new PlatformNotSupportedException("This function is only available on Windows");
+            }
+            if (!IsValidThumbprint(thumbprint))
+            {
+                throw new ArgumentException("Invalid thumbprint value");
+            }
+            thumbprint = thumbprint.ToUpper();
+            _logger.LogInformation("Getting certificate {thumbprint} from store", thumbprint);
+
+            return
+                GetCert(thumbprint, StoreLocation.CurrentUser)
+                ?? GetCert(thumbprint, StoreLocation.LocalMachine)
+                ?? throw new ArgumentException($"Certificate with thumbprint {thumbprint} could not be found");
+        }
+
+        private X509Certificate2? GetCert(string thumbprint, StoreLocation location)
+        {
+            using var store = new X509Store(StoreName.My, location);
+            store.Open(OpenFlags.ReadOnly);
+            var cert = store.Certificates.FirstOrDefault(m => m.Thumbprint.ToUpper() == thumbprint.ToUpper());
+            store.Close();
+            if (cert != null)
+            {
+                if (!cert.HasPrivateKey)
+                {
+                    _logger.LogWarning("Certificate {thumbprint} found in store {store} but has no private key", thumbprint, location);
+                    cert.Dispose();
+                    return null;
+                }
+                _logger.LogInformation("Certificate {name} found in store {store}", cert.Subject, location);
+                return cert;
+            }
+            _logger.LogInformation("Certificate {thumbprint} not found in store {store}", thumbprint, location);
+            return null;
         }
 
         #region Windows Hacks
