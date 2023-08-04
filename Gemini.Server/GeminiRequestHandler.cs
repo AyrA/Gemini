@@ -13,12 +13,14 @@ using System.Text.RegularExpressions;
 namespace Gemini.Server
 {
     [AutoDIRegister(AutoDIType.Transient)]
-    public class GeminiRequestHandler
+    public class GeminiRequestHandler : IDisposable
     {
         private readonly ILogger<GeminiRequestHandler> _logger;
         private readonly CertificateService _certificateService;
         private readonly IServiceProvider _serverProvider;
         private readonly Type[] _hostTypes;
+        private readonly GeminiHost[] _hosts;
+        private bool disposed = false;
 
         public X509Certificate2? ServerCertificate { get; set; }
         public bool RequireClientCertificate { get; set; }
@@ -29,6 +31,30 @@ namespace Gemini.Server
             _certificateService = certificateService;
             _serverProvider = serverProvider;
             _hostTypes = Tools.GetHosts(services);
+            var hosts = _hostTypes.Select(m => (GeminiHost)serverProvider.GetRequiredService(m)).ToList();
+            for (var i = 0; i < hosts.Count; i++)
+            {
+                var host = hosts[i];
+                try
+                {
+                    _logger.LogInformation("Starting host: {type}", host.GetType().Name);
+                    host.Start();
+                }
+                catch (Exception ex)
+                {
+                    hosts.RemoveAt(i--);
+                    _logger.LogWarning(ex, "Host {type} could not be started. Discarding it", host.GetType().Name);
+                    try
+                    {
+                        host.Dispose();
+                    }
+                    catch (Exception disposeEx)
+                    {
+                        _logger.LogError(disposeEx, ".Dispose() of {type} threw an exception. This should never happen, and the owner of this module should fix this ASAP.", host.GetType().Name);
+                    }
+                }
+            }
+            _hosts = hosts.ToArray();
         }
 
         public void UseDeveloperCertificate()
@@ -68,6 +94,10 @@ namespace Gemini.Server
             try
             {
                 url = ReadRequest(authStream);
+                if (url == null)
+                {
+                    throw new Exception("Failed to decode uri. Aborting request");
+                }
             }
             catch (Exception ex)
             {
@@ -83,41 +113,45 @@ namespace Gemini.Server
                 }
             }
 
-            if (url != null)
+            if (url == null)
             {
-                GeminiResponse? response = null;
-                _logger.LogInformation("Request URL from {address}: {url}", remoteAddress, url);
-                using var scope = _serverProvider.CreateScope();
-                for (var i = 0; i < _hostTypes.Length && response == null; i++)
+                return;
+            }
+
+
+            GeminiResponse? response = null;
+            _logger.LogInformation("Request URL from {address}: {url}", remoteAddress, url);
+            using var scope = _serverProvider.CreateScope();
+            for (var i = 0; i < _hosts.Length && response == null; i++)
+            {
+                _logger.LogDebug("Checking host {index}/{count}", i + 1, _hosts.Length);
+                var host = _hosts[i];
+                var hostname = host.GetType().FullName;
+                bool accepted = false;
+                try
                 {
-                    _logger.LogDebug("Checking host {index}/{count}", i + 1, _hostTypes.Length);
-                    var host = (GeminiHost)_serverProvider.GetRequiredService(_hostTypes[i]);
-                    var hostname = host.GetType().FullName;
-                    bool accepted = false;
+                    accepted = host.IsAccepted(url, remoteAddress.Address, tls.ClientCertificate);
+                    if (!accepted)
+                    {
+                        _logger.LogDebug("Host rejected request. Skipping it");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Function .IsAccepted(...) of {host} failed. Skipping it.", hostname);
+                    continue;
+                }
+                if (accepted)
+                {
                     try
                     {
-                        accepted = host.IsAccepted(url, remoteAddress.Address, tls.ClientCertificate);
-                        if (!accepted)
+                        url = host.Rewrite(url, remoteAddress.Address, tls.ClientCertificate);
+                        if (url == null)
                         {
-                            _logger.LogDebug("Host rejected request");
+                            _logger.LogInformation("{host} set the url to null. Aborting the request", hostname);
+                            return;
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Host function of {host} .IsAccepted(...) failed", hostname);
-                    }
-                    try
-                    {
-                        if (accepted)
-                        {
-                            url = host.Rewrite(url, remoteAddress.Address, tls.ClientCertificate);
-                            if (url == null)
-                            {
-                                _logger.LogInformation("{host} set the url to null", hostname);
-                                return;
-                            }
-                            response = host.Request(url, remoteAddress, tls.ClientCertificate).Result;
-                        }
+                        response = host.Request(url, remoteAddress, tls.ClientCertificate).Result;
                     }
                     catch (Exception ex)
                     {
@@ -133,34 +167,65 @@ namespace Gemini.Server
                             _logger.LogWarning(exErr, "Unable to send error response to {address}", remoteAddress);
                         }
                     }
-                    if (response != null)
-                    {
-                        using (response)
-                        {
-                            _logger.LogInformation("Response: {code} {status}", (int)response.StatusCode, response.Status);
-                            try
-                            {
-                                response.SendTo(authStream);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Failed to send response data to {address}", remoteAddress);
-                            }
-                        }
-                        //Stop processing
-                        return;
-                    }
                 }
-                //No host accepted the request
-                _logger.LogInformation("No response from any host. Sending default 'not found' to {address}", remoteAddress);
+                if (response != null)
+                {
+                    using (response)
+                    {
+                        _logger.LogInformation("Response: {code} {status}", (int)response.StatusCode, response.Status);
+                        try
+                        {
+                            response.SendTo(authStream);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to send response data to {address}", remoteAddress);
+                        }
+                    }
+                    //Stop processing
+                    return;
+                }
+            }
+            //No host accepted the request
+            _logger.LogInformation("No response from any host. Sending default 'not found' to {address}", remoteAddress);
+            try
+            {
+                using var g404 = GeminiResponse.NotFound();
+                g404.SendTo(authStream);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to send error response to {address}", remoteAddress);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+            GC.SuppressFinalize(this);
+            for (var i = 0; i < _hosts.Length; i++)
+            {
+                var h = _hosts[i];
                 try
                 {
-                    using var g404 = GeminiResponse.NotFound();
-                    g404.SendTo(authStream);
+                    h.Stop();
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Unable to send error response to {address}", remoteAddress);
+                    _logger.LogError(ex, ".Stop() of {type} threw an exception.", h.GetType().Name);
+                }
+                try
+                {
+                    h.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, ".Dispose() of {type} threw an exception. This should never happen, and the owner of this module should fix this ASAP.", h.GetType().Name);
                 }
             }
         }

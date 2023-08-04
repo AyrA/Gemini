@@ -1,6 +1,6 @@
 [
     {
-        "Hosts": ["*"],
+        "Hosts": [ "*" ],
         "RootDirectory": "C:\\Temp",
         "AllowDirectoryBrowsing": true
     }

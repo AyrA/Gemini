@@ -370,6 +370,12 @@ namespace Gemini.Server.Network
             //Certificate check is not done here to facilitate status code 60
         }
 
+        public override void Dispose()
+        {
+            GC.SuppressFinalize(this);
+            //NOOP
+        }
+
         private StaticFileHostConfig? GetHostConfig(Uri url) => GetHostConfig(url.Host);
 
         private StaticFileHostConfig? GetHostConfig(string host)
@@ -381,16 +387,5 @@ namespace Gemini.Server.Network
             _logger.LogDebug("Getting config for {host}", host);
             return _config.FirstOrDefault(m => m.IsMatch(host));
         }
-
-#if DEBUG
-        public void RegisterThumbprint(string thumbprint)
-        {
-            _logger.LogDebug("Registering {thumb} with host instance at runtime", thumbprint);
-            foreach (var config in _config)
-            {
-                config.Thumbprints = config.Thumbprints.Concat(new[] { thumbprint }).ToArray();
-            }
-        }
-#endif
     }
 }

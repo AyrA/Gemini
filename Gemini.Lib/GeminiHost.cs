@@ -6,7 +6,7 @@ namespace Gemini.Lib
     /// <summary>
     /// Interface for a gemini host component
     /// </summary>
-    public abstract class GeminiHost
+    public abstract class GeminiHost : IDisposable
     {
         /// <summary>
         /// Called once by the hosting environment
@@ -36,11 +36,10 @@ namespace Gemini.Lib
         /// <returns>Rewritten URL</returns>
         /// <remarks>
         /// The rewritten URL replaces the passed in URL in the request pipeline for all future hosts.
-        /// If no rewrite functionality for a host is desired,
-        /// the method can simply return the <paramref name="url"/> argument as-is.
+        /// The default implementation is to not rewrite and return the argument as-is.
         /// The method is called once before every call to <see cref="Request(Uri, EndPoint)"/>.
         /// By implementing the Rewrite method but hardcoding <see cref="Request(Uri, EndPoint)"/>
-        /// to always return false, a gemini host can effectively be turned into a pure URL rewrite mapper.
+        /// to always return null, a gemini host can effectively be turned into a pure URL rewrite mapper.
         /// Returning null will terminate the request early.
         /// </remarks>
         public virtual Uri Rewrite(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate) => url;
@@ -69,11 +68,13 @@ namespace Gemini.Lib
         /// a call to <see cref="Rewrite(Uri)"/>
         /// and <see cref="Request(Uri, EndPoint)"/> follows.
         /// If this returns false, the host is skipped once for this request.
-        /// Hosts that accept all requests should override this implementation
-        /// with a simple one to gain extra performance by not performing checks.
-        /// The default implementation checks against
-        /// <see cref="HostNames"/> and <see cref="RemoteAddressRestrictions"/>.
+        /// The default implementation accepts all requests
         /// </remarks>
-        public abstract bool IsAccepted(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate);
+        public virtual bool IsAccepted(Uri url, IPAddress remoteAddress, X509Certificate? clientCertificate) => true;
+
+        /// <summary>
+        /// Disposes this instance
+        /// </summary>
+        public abstract void Dispose();
     }
 }
