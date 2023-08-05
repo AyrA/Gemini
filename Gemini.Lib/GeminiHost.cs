@@ -9,13 +9,45 @@ namespace Gemini.Lib
     public abstract class GeminiHost : IDisposable
     {
         /// <summary>
-        /// Called once by the hosting environment
+        /// The maximum internal host priority in use
         /// </summary>
         /// <remarks>
-        /// The hosting environment guarantees that this method is called exactly once
-        /// before the first access to a public property or other method
+        /// This is never the biggest possible value 
+        /// to ensure custom hosts can be registered as fallback request handler
         /// </remarks>
-        public virtual void Start() { }
+        public const ushort MaxInternalHost = 0xFFFE;
+        /// <summary>
+        /// The minimum priority found on internal hosts
+        /// </summary>
+        public const ushort MinInternalHost = 0xFF00;
+        /// <summary>
+        /// The maximum priority that external hosts can use to be processed before internal hosts.
+        /// </summary>
+        /// <remarks>
+        /// This number is guaranteed to be less than <see cref="MinInternalHost"/>,
+        /// but it's not guaranteed to be only 1 less.
+        /// </remarks>
+        public const ushort MaxExternalHost = MinInternalHost - 1;
+
+        /// <summary>
+        /// Gets the priority of the host.
+        /// Lower indicates higher priority in the request pipeline
+        /// </summary>
+        public ushort Priority { get; protected set; } = MaxExternalHost;
+
+        /// <summary>
+        /// Called once by the hosting environment
+        /// </summary>
+        /// <returns>
+        /// true, if starting was successful.
+        /// If false, the host will not be loaded into the request pipeline
+        /// </returns>
+        /// <remarks>
+        /// The hosting environment guarantees that this method is called at least once
+        /// before the first access to a public property or other method,
+        /// but it may be called multiple times.
+        /// </remarks>
+        public virtual bool Start() => true;
 
         /// <summary>
         /// Called once by the hosting environment during shutdown

@@ -13,6 +13,12 @@ namespace Gemini.Server.Network
     [AutoDIRegister(AutoDIType.Singleton)]
     public class StaticFileHost : GeminiHost
     {
+        private class StaticFileHostJson
+        {
+            public bool Enabled { get; set; }
+            public StaticFileHostConfig[]? Hosts { get; set; }
+        }
+
         private class StaticFileHostConfig
         {
             private string[] _remoteRanges = Array.Empty<string>();
@@ -224,39 +230,64 @@ namespace Gemini.Server.Network
             }
         }
 
-        private readonly List<StaticFileHostConfig> _config = new();
+        private StaticFileHostJson? _config;
         private readonly ILogger<StaticFileHost> _logger;
 
         public StaticFileHost(ILogger<StaticFileHost> logger)
         {
             _logger = logger;
+            Priority = ushort.MaxValue - 1;
         }
 
-        public override void Start()
+        public override bool Start()
         {
             _logger.LogInformation("Starting host and loading configuration");
             var jsonFile = Path.Combine(AppContext.BaseDirectory, $"{nameof(StaticFileHost)}.json");
-            List<StaticFileHostConfig>? newSettings;
+            StaticFileHostJson? newConfig;
             if (File.Exists(jsonFile))
             {
                 try
                 {
-                    newSettings = File.ReadAllText(jsonFile).FromJson<List<StaticFileHostConfig>>()
-                        ?? throw new Exception("Deserialized configuration is null");
-                    if (newSettings.Count == 0)
-                    {
-                        throw new Exception("Deserialized configuration is empty");
-                    }
-                    foreach (var c in newSettings)
-                    {
-                        _logger.LogDebug("Validating Configuration");
-                        c.Validate();
-                    }
+                    newConfig = File.ReadAllText(jsonFile).FromJson<StaticFileHostJson>();
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unable to deserialize configuration");
-                    throw;
+                    _logger.LogError(ex, "Unable to deserialize configuration. Stopping loading process");
+                    return false;
+                }
+
+                if (newConfig == null)
+                {
+                    _logger.LogError("Deserialized configuration is null. Stopping loading process");
+                    return false;
+                }
+                if (!newConfig.Enabled)
+                {
+                    _logger.LogInformation("Static file host is not enabled. Stopping loading process");
+                    return false;
+                }
+                if (newConfig.Hosts == null || newConfig.Hosts.Length == 0)
+                {
+                    _logger.LogInformation("No hosts configured. Stopping loading process");
+                    return false;
+                }
+                foreach (var c in newConfig.Hosts)
+                {
+                    if (c == null)
+                    {
+                        _logger.LogWarning("Host list contains null entry. Skipping for now");
+                        continue;
+                    }
+                    _logger.LogDebug("Validating Configuration");
+                    try
+                    {
+                        c.Validate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to validate a static file host configuration value. Stopping loading process");
+                        return false;
+                    }
                 }
             }
             else
@@ -268,30 +299,36 @@ namespace Gemini.Server.Network
                     AllowDirectoryBrowsing = false
                 };
                 _logger.LogWarning("Cannot find configuration: {file}. Creating a global listener for files in {path} instead", jsonFile, host.RootDirectory);
-                newSettings = new() { host };
-                newSettings[0].Validate();
+                Directory.CreateDirectory(host.RootDirectory);
+                host.Validate();
+                newConfig = new StaticFileHostJson()
+                {
+                    Enabled = true,
+                    Hosts = new[] { host }
+                };
             }
-            if (newSettings != null)
+            if (newConfig != null)
             {
-                _config.Clear();
-                _config.AddRange(newSettings);
+                _config = newConfig;
             }
-            base.Start();
+            return base.Start();
         }
 
         public override void Stop()
         {
-            _config.Clear();
+            _config = null;
             base.Stop();
         }
 
         public override async Task<GeminiResponse?> Request(Uri url, IPEndPoint client, X509Certificate? cert)
         {
-            if (_config.Count == 0)
+            //Creating a copy now avoids race conditions with Stop()
+            var hosts = _config?.Hosts;
+            if (hosts == null)
             {
                 return null;
             }
-            var host = GetHostConfig(url)
+            var host = GetHostConfig(url, hosts)
                 ?? throw new InvalidOperationException(
                     $"This {nameof(StaticFileHost)} does not accept requests for {url.Host}");
 
@@ -357,11 +394,12 @@ namespace Gemini.Server.Network
 
         public override bool IsAccepted(Uri _1, IPAddress _2, X509Certificate? _3)
         {
-            if (_config.Count == 0)
+            var c = _config?.Hosts;
+            if (c == null || c.Length == 0)
             {
                 return false;
             }
-            var host = GetHostConfig(_1);
+            var host = GetHostConfig(_1, c);
             if (host == null)
             {
                 return false;
@@ -373,19 +411,27 @@ namespace Gemini.Server.Network
         public override void Dispose()
         {
             GC.SuppressFinalize(this);
-            //NOOP
         }
 
-        private StaticFileHostConfig? GetHostConfig(Uri url) => GetHostConfig(url.Host);
+        private StaticFileHostConfig? GetHostConfig(Uri url, StaticFileHostConfig[]? configs) => GetHostConfig(url.Host, configs);
 
-        private StaticFileHostConfig? GetHostConfig(string host)
+        private StaticFileHostConfig? GetHostConfig(string host, StaticFileHostConfig[]? configs)
         {
             if (string.IsNullOrWhiteSpace(host))
             {
                 throw new ArgumentException($"'{nameof(host)}' cannot be null or whitespace.", nameof(host));
             }
+            if (configs == null)
+            {
+                throw new ArgumentNullException(nameof(configs));
+            }
+
             _logger.LogDebug("Getting config for {host}", host);
-            return _config.FirstOrDefault(m => m.IsMatch(host));
+            if (configs.Length == 0)
+            {
+                return null;
+            }
+            return configs.FirstOrDefault(m => m.IsMatch(host));
         }
     }
 }
