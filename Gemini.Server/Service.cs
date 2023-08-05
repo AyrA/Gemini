@@ -22,6 +22,7 @@ namespace Gemini.Server
         private readonly IServiceProvider _provider;
         private readonly CertificateService _certService;
         private readonly Tools _tools;
+        private readonly IHostApplicationLifetime _lifetime;
         private readonly List<ListenerConfig> _servers = new();
 
         private class ListenerConfig : IDisposable
@@ -119,13 +120,14 @@ namespace Gemini.Server
             }
         }
 
-        public Service(ILogger<Service> logger, IServiceProvider provider, CertificateService certService, Tools tools)
+        public Service(ILogger<Service> logger, IServiceProvider provider, CertificateService certService, Tools tools, IHostApplicationLifetime lifetime)
         {
             _logger = logger;
             _semaphore = new SemaphoreSlim(1);
             _provider = provider;
             _certService = certService;
             _tools = tools;
+            _lifetime = lifetime;
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -139,6 +141,7 @@ namespace Gemini.Server
                 throw new Exception("TCP configuration is empty");
             }
             _logger.LogInformation("Found {count} listener configurations", configs.Length);
+            //Cleanup remnants of previous runs
             _servers.ForEach(server => server.Stop());
             _servers.Clear();
             foreach (var config in configs)
@@ -147,11 +150,19 @@ namespace Gemini.Server
                 {
                     config.Validate();
                     _logger.LogInformation("Starting new listener on {ep}", config.Listen);
+                    try
+                    {
+                        config.Handler = _provider.GetRequiredService<GeminiRequestHandler>();
+                    }
+                    catch
+                    {
+                        _logger.LogError("Failed to create request handler. The listener {ep} will not be created", config.Listen);
+                        continue;
+                    }
                     config.CreateServer(_provider);
-                    config.Handler = _provider.GetRequiredService<GeminiRequestHandler>();
                     if (string.IsNullOrWhiteSpace(config.Certificate))
                     {
-                        _logger.LogWarning("No certificate file name or thumbprint specified. Using temporary certificate");
+                        _logger.LogWarning("No certificate file name or thumbprint specified. Using developer certificate");
                         config.Handler.UseDeveloperCertificate();
                     }
                     else
@@ -170,9 +181,21 @@ namespace Gemini.Server
             }
             if (_servers.Count == 0)
             {
-                throw new Exception("No active listeners");
+                _logger.LogCritical("All TCP listeners failed to start. This application will shut down now");
+                //This has to be delayed, otherwise weird crashes happen
+                return Task
+                    .Delay(50, CancellationToken.None)
+                    .ContinueWith((t) => _lifetime.StopApplication(), CancellationToken.None);
             }
-            return _semaphore.WaitAsync(stoppingToken);
+            try
+            {
+                return _semaphore.WaitAsync(stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                //Token was cancelled. Just exit
+                return Task.CompletedTask;
+            }
         }
 
         private X509Certificate2 LoadCertificate(ListenerConfig config)

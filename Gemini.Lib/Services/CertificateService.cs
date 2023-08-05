@@ -13,6 +13,7 @@ namespace Gemini.Lib.Services
         /// <summary>
         /// Setting this to false falls back to RSA certificates
         /// </summary>
+        /// <remarks>Do not change this. "false" is currently not implemented</remarks>
         private static readonly bool useEcc = true;
 
         /// <summary>

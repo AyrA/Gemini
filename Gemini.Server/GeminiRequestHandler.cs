@@ -35,26 +35,45 @@ namespace Gemini.Server
             for (var i = 0; i < hosts.Count; i++)
             {
                 var host = hosts[i];
+                var name = host.GetType().Name;
+                var start = false;
                 try
                 {
-                    _logger.LogInformation("Starting host: {type}", host.GetType().Name);
-                    host.Start();
+                    _logger.LogInformation("Starting host: {type}", name);
+                    start = host.Start();
+                    if (!start)
+                    {
+                        _logger.LogInformation("Host {type} returned 'false' during Start() call. Discarding it", name);
+                    }
                 }
                 catch (Exception ex)
                 {
+                    start = false;
+                    _logger.LogWarning(ex, "Host {type} could not be started due to an error. Discarding it", name);
+                }
+                if (!start)
+                {
                     hosts.RemoveAt(i--);
-                    _logger.LogWarning(ex, "Host {type} could not be started. Discarding it", host.GetType().Name);
                     try
                     {
                         host.Dispose();
                     }
-                    catch (Exception disposeEx)
+                    catch (Exception ex)
                     {
-                        _logger.LogError(disposeEx, ".Dispose() of {type} threw an exception. This should never happen, and the owner of this module should fix this ASAP.", host.GetType().Name);
+                        _logger.LogError(ex, ".Dispose() of {type} threw an exception. This should never happen, and the owner of this module should fix this ASAP.", name);
                     }
                 }
             }
-            _hosts = hosts.ToArray();
+            if (hosts.Count == 0)
+            {
+                _logger.LogWarning("No hosts are active for this request handler. Terminating operations");
+                throw new Exception("No hosts are active for this request handler. Terminating operations");
+            }
+            _hosts = hosts
+                .OrderBy(m => m.Priority)
+                .ThenBy(m => m.GetType().AssemblyQualifiedName)
+                .ThenBy(m => m.GetType().FullName)
+                .ToArray();
         }
 
         public void UseDeveloperCertificate()
