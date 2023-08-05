@@ -43,9 +43,9 @@ namespace Gemini.Server
 
             using var fs = File.OpenRead(pathToZip);
             using var arc = new ZipArchive(fs, ZipArchiveMode.Read);
-            var infoEntry = arc.Entries.FirstOrDefault(m => m.FullName.ToLower() == "/info.json")
+            var infoEntry = arc.Entries.FirstOrDefault(m => m.FullName.ToLower() == "info.json")
                 ?? throw new IOException("Unable to find info.json in the root of the zip archive");
-            var pluginEntry = arc.Entries.FirstOrDefault(m => m.FullName.ToLower() == "/plugin.dll")
+            var pluginEntry = arc.Entries.FirstOrDefault(m => m.FullName.ToLower() == "plugin.dll")
                 ?? throw new IOException("Unable to find plugin.dll in the root of the zip archive");
             using var entryStream = infoEntry.Open();
             using var msInfo = new MemoryStream();
@@ -59,25 +59,26 @@ namespace Gemini.Server
             var installDir = Path.Combine(pluginDir, pluginName);
             if (Directory.Exists(installDir))
             {
-                Console.WriteLine("Plugin exists, checking if zip is newer..."); ;
+                Console.WriteLine("Plugin exists, checking if zip is newer...");
                 //Check if current plugin is newer. If it isn't. Refuse to install
+                InfoJson existingInfo;
                 try
                 {
-                    var existingInfo = File.ReadAllText(Path.Combine(installDir, "info.json")).FromJson<InfoJson>()
+                    existingInfo = File.ReadAllText(Path.Combine(installDir, "info.json")).FromJson<InfoJson>()
                         ?? throw new Exception("Unable to read info.json from the existing plugin");
                     existingInfo.Validate();
-                    if (existingInfo.Version >= zipPluginInfo.Version)
-                    {
-                        throw new Exception($"A plugin with the name '{pluginName}' already exists, but the installed version is not older than the new version");
-                    }
-                    if (existingInfo.Id != zipPluginInfo.Id)
-                    {
-                        throw new Exception("Plugin already exists, but the name cases differ.");
-                    }
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception($"A plugin with the name '{pluginName}' already exists, but the version could not be determined", ex);
+                    throw new Exception($"Failed to parse info.json of plugin '{pluginName}'. See inner exception for details.", ex);
+                }
+                if (existingInfo.Version >= zipPluginInfo.Version)
+                {
+                    throw new Exception($"A plugin with the name '{pluginName}' already exists, but the installed version is not older than the new version");
+                }
+                if (existingInfo.Id != zipPluginInfo.Id)
+                {
+                    throw new Exception("Plugin already exists, but the ids in the info.json differ.");
                 }
                 Console.WriteLine("Zip file is newer than installed version. Deleting old version");
                 //Plugin exists and is older. We can install over it.
@@ -93,13 +94,25 @@ namespace Gemini.Server
             Directory.CreateDirectory(installDir);
             foreach (var entry in arc.Entries)
             {
-                Console.Error.WriteLine("Extracting {0}...", entry.FullName);
-                var p = Path.GetFullPath(installDir + entry.FullName);
+                var p = Path.GetFullPath(Path.Combine(installDir, entry.FullName));
                 //Prevent path traversal attacks
                 if (!p.StartsWith(installDir + Path.DirectorySeparatorChar))
                 {
                     throw new Exception($"Possible path traversal attack. Name in zip archive was {entry.FullName}");
                 }
+                //If directory, create it
+                if (entry.FullName.EndsWith('/'))
+                {
+                    Console.Error.WriteLine("Creating folder {0}...", entry.FullName);
+                    Directory.CreateDirectory(p);
+                    continue;
+                }
+                if (File.Exists(p))
+                {
+                    Console.Error.WriteLine($"File {0} already exists. Skipping it", entry.FullName);
+                    continue;
+                }
+                Console.Error.WriteLine("Extracting {0}...", entry.FullName);
                 Directory.CreateDirectory(Path.GetDirectoryName(p) ?? installDir);
                 entry.ExtractToFile(p, false);
             }
@@ -119,9 +132,11 @@ namespace Gemini.Server
             {
                 throw new Exception($"Unable to find plugin '{pluginName}'");
             }
+
             //Shortcut if nothing has to be preserved
             if (preserve.Length == 0)
             {
+                Console.Error.WriteLine("Deleting {0} recursively because there are no entries to preserve", pluginName);
                 Directory.Delete(installDir, true);
                 return;
             }
@@ -142,6 +157,8 @@ namespace Gemini.Server
                     .ToArray();
             }
 
+            Console.Error.WriteLine("Uninstalling {0}. Have {1} entried to preserve", pluginName, preserve.Length);
+
             DeleteDir(installDir, installDir, preserve);
         }
 
@@ -152,6 +169,7 @@ namespace Gemini.Server
             //Don't bother to scan files and subdirectories if this directory is to be preserved
             if (matchDir != string.Empty && preserve.Any(m => string.Compare(m, matchDir, StringComparison.OrdinalIgnoreCase) == 0))
             {
+                Console.Error.WriteLine("Skipping to preserve: {0}", matchDir);
                 return false;
             }
             //Delete all non-matching files
@@ -160,10 +178,12 @@ namespace Gemini.Server
                 var subEntry = file[(installDir.Length + 1)..];
                 if (preserve.Any(m => string.Compare(m, subEntry, StringComparison.OrdinalIgnoreCase) == 0))
                 {
+                    Console.Error.WriteLine("Skipping to preserve: {0}", subEntry);
                     keepDir = true;
                 }
                 else
                 {
+                    Console.Error.WriteLine("Deleting {0}", subEntry);
                     DeleteFile(file);
                 }
             }
@@ -177,6 +197,7 @@ namespace Gemini.Server
             }
             if (!keepDir)
             {
+                Console.Error.WriteLine("Deleting: {0}", dir);
                 DeleteDirectory(dir);
             }
             return !keepDir;

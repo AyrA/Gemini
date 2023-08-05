@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "Gemini.Server": {
+      "commandName": "Project",
+      "remoteDebugEnabled": false
+    },
+    "Install plugin": {
+      "commandName": "Project",
+      "commandLineArgs": "/install\r\nD:\\Projects\\Gemini\\Plugin\\bin\\Debug\\net6.0\\TestPlugin.zip"
+    },
+    "Uninstall plugin": {
+      "commandName": "Project",
+      "commandLineArgs": "/uninstall\r\n617FA9B6-0C3F-47EE-A43A-00BA53F06E8B"
+    }
+  }
+}
