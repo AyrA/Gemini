@@ -1,7 +1,10 @@
-[
-    {
-        "Hosts": [ "*" ],
-        "RootDirectory": "C:\\Temp",
-        "AllowDirectoryBrowsing": true
-    }
-]
+{
+    "Enabled": true,
+    "Hosts": [
+        {
+            "Hosts": [ "*" ],
+            "RootDirectory": "C:\\Temp",
+            "AllowDirectoryBrowsing": true
+        }
+    ]
+}
