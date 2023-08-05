@@ -52,7 +52,19 @@ Note: If you register the host as singleton, you may find that `Start()` and `St
 once for each configured TCP endpoint. This is because each TCP endpoint gets the same instance of your host.
 Ensure that your host is resistant to multiple calls to those functions.
 
+## Storing Configuration
+
+Host specific configuration is best stored inside of the folder the host runs from.
+An easy way to obtain this path is to use the code below:
+
+```C#
+var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+```
+
+
 ## Example Host
+
+*Check the "Plugin" directory of this repository. It contains a fully functional demo plugin*
 
 Below is a minimal example of a host that sends the IP address of the client back to it.
 Explore `GeminiHost` to see all the properties and methods it has.
@@ -97,6 +109,40 @@ namespace ChangeMePlease
 	}
 }
 ```
+
+### Property: Priority
+
+This property takes a value from `0x0` to `0xFFFF`. The default is `0xFEFF`
+
+When all hosts have been loaded they will be sorted in accordance to that value,
+with the lowest value being first in the request pipeline.
+
+Values do not need to be unique, but the ordering of hosts with identical values will be indeterminate.
+The ordering will be identical for as long as no plugins are added or removed.
+
+Note: This property is evaluated after `Start()` has been called.
+This means you're safe to provide a way for users to configure the priority of your host,
+and set it during the call to `Start()` rather than the constructor.
+
+Changing this value after the call to `Start()` has completed has no effect right now,
+but upon popular demand might do so in the future.
+
+#### Recommended Ranges
+
+All internal hosts have at least `0xFF00` as the priority.
+Using `0xFEFF` or lower will guarantee your host comes before any internal host.
+Internal hosts do not use `0xFFFF`.
+This permits custom fallback plugins to run.
+
+Hosts with less than `0x1000` should be global access filters
+that don't process requests but merely filter them (see Rewrite chapter below).
+With faster filters using lower numbers, and slower filters higher numbers.
+
+Hosts at `0x1000` up to `0x7FFF` should be hosts that rewrite URLs but do not otherwise process requests.
+
+Hosts at `0x8000` up to `0xFEFF` should be regular hosts that process requests,
+with hosts that are very fast tending towards the lower end of the range,
+while slower hosts use the upper end of the range.
 
 ### Method: IsAccepted
 
