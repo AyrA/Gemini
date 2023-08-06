@@ -405,10 +405,11 @@ namespace Gemini.Lib.Services
             thumbprint = thumbprint.ToUpper();
             _logger.LogInformation("Getting certificate {thumbprint} from store", thumbprint);
 
-            return
+            var cert =
                 GetCert(thumbprint, StoreLocation.CurrentUser)
                 ?? GetCert(thumbprint, StoreLocation.LocalMachine)
                 ?? throw new ArgumentException($"Certificate with thumbprint {thumbprint} could not be found");
+            return MakeExportable(cert);
         }
 
         /// <summary>

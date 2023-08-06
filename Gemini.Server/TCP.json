@@ -1,14 +1,9 @@
 [
     {
-        "Listen": "127.0.0.1:1965"
-    },
-    {
-        "Listen": "[::1]:1965"
-    },
-    {
-        "Listen": "0.0.0.0:1965"
-    },
-    {
-        "Listen": "[::]:1965"
+        "Listen": "[::]:1965",
+        "RequireClientCertificate": false,
+        "ServerCertificates": {
+            "*": "D859A66254E95673EA51FCCAB4455FD5E45E0C30"
+        }
     }
 ]

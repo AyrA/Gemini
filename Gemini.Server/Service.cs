@@ -28,8 +28,10 @@ namespace Gemini.Server
         private class ListenerConfig : IDisposable
         {
             public string? Listen { get; set; }
+
             public bool RequireClientCertificate { get; set; }
-            public string? Certificate { get; set; }
+
+            public Dictionary<string, string>? ServerCertificates { get; set; }
 
             [JsonIgnore]
             public TcpServer? Server { get; private set; }
@@ -160,14 +162,14 @@ namespace Gemini.Server
                         continue;
                     }
                     config.CreateServer(_provider);
-                    if (string.IsNullOrWhiteSpace(config.Certificate))
+                    if (config.ServerCertificates == null || config.ServerCertificates.Count == 0)
                     {
                         _logger.LogWarning("No certificate file name or thumbprint specified. Using developer certificate");
                         config.Handler.UseDeveloperCertificate();
                     }
                     else
                     {
-                        config.Handler.ServerCertificate = LoadCertificate(config);
+                        config.Handler.ServerCertificates = LoadCertificates(config);
                     }
                     config.Server.Connection += config.Handler.TcpServerEventHandler;
                     config.Start();
@@ -198,27 +200,37 @@ namespace Gemini.Server
             }
         }
 
-        private X509Certificate2 LoadCertificate(ListenerConfig config)
+        private Dictionary<string, X509Certificate2> LoadCertificates(ListenerConfig config)
         {
-            if (string.IsNullOrWhiteSpace(config.Certificate))
+            var certs = config.ServerCertificates;
+            var ret = new Dictionary<string, X509Certificate2>();
+            if (certs == null || certs.Count == 0)
             {
                 _logger.LogWarning("No certificate file name or thumbprint specified in listener for {endpoint}. Using temporary certificate", config.Listen);
-                return _certService.CreateOrLoadDevCert();
+                ret.Add("*", _certService.CreateOrLoadDevCert());
+                return ret;
             }
-            if (Path.IsPathFullyQualified(config.Certificate))
+            foreach (var certInfo in certs)
             {
-                return _certService.ReadFromFile(config.Certificate, null);
+                var relPath = Path.Combine(AppContext.BaseDirectory, certInfo.Value);
+                if (Path.IsPathFullyQualified(certInfo.Value))
+                {
+                    ret.Add(certInfo.Key.ToUpper(), _certService.ReadFromFile(certInfo.Value, null));
+                }
+                else if (File.Exists(relPath))
+                {
+                    ret.Add(certInfo.Key.ToUpper(), _certService.ReadFromFile(certInfo.Value, null));
+                }
+                else if (CertificateService.IsValidThumbprint(certInfo.Value))
+                {
+                    ret.Add(certInfo.Key.ToUpper(), _certService.ReadFromStore(certInfo.Value));
+                }
+                else
+                {
+                    throw new ArgumentException($"Certificate '{certInfo.Value}' cannot be loaded");
+                }
             }
-            var relPath = Path.Combine(AppContext.BaseDirectory, config.Certificate);
-            if (File.Exists(relPath))
-            {
-                return _certService.ReadFromFile(config.Certificate, null);
-            }
-            if (CertificateService.IsValidThumbprint(config.Certificate))
-            {
-                return _certService.ReadFromStore(config.Certificate);
-            }
-            throw new ArgumentException($"'{config.Certificate}' cannot be loaded");
+            return ret;
         }
 
         public override async Task StartAsync(CancellationToken cancellationToken)

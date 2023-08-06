@@ -4,6 +4,7 @@ using Gemini.Lib.Services;
 using Gemini.Server.Network;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -22,7 +23,7 @@ namespace Gemini.Server
         private readonly GeminiHost[] _hosts;
         private bool disposed = false;
 
-        public X509Certificate2? ServerCertificate { get; set; }
+        public Dictionary<string, X509Certificate2>? ServerCertificates { get; set; }
         public bool RequireClientCertificate { get; set; }
 
         public GeminiRequestHandler(ILogger<GeminiRequestHandler> logger, CertificateService certificateService, IServiceProvider serverProvider, IServiceCollection services)
@@ -76,9 +77,13 @@ namespace Gemini.Server
                 .ToArray();
         }
 
+        [MemberNotNull(nameof(ServerCertificates))]
         public void UseDeveloperCertificate()
         {
-            ServerCertificate = _certificateService.CreateOrLoadDevCert();
+            ServerCertificates = new Dictionary<string, X509Certificate2>()
+            {
+                {"*", _certificateService.CreateOrLoadDevCert() }
+            };
         }
 
         public void TcpServerEventHandler(object sender, Socket client, IPEndPoint remoteAddress)
@@ -87,10 +92,10 @@ namespace Gemini.Server
         public void HandleTcpConnection(Socket client, IPEndPoint remoteAddress)
         {
             _logger.LogInformation("Got connection from {address}", remoteAddress);
-            if (ServerCertificate == null)
+            if (ServerCertificates == null || ServerCertificates.Count == 0)
             {
                 _logger.LogWarning("No server certificate was specified. Creating development certificate");
-                ServerCertificate = _certificateService.CreateOrLoadDevCert();
+                UseDeveloperCertificate();
             }
             using var tls = _serverProvider.GetRequiredService<TlsServer>();
             tls.RequireClientCertificate = RequireClientCertificate;
@@ -98,7 +103,7 @@ namespace Gemini.Server
             _logger.LogDebug("Trying TLS server auth with {address}...", remoteAddress);
             try
             {
-                tls.ServerAuth(ServerCertificate);
+                tls.ServerAuth(ServerCertificates);
             }
             catch (Exception ex)
             {

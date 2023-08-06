@@ -68,6 +68,10 @@ namespace Gemini.Server.Network
                 }
                 _logger.LogInformation("Begin listening for TCP connections");
                 _listener = new TcpListener(_bind);
+                if (_bind.AddressFamily == AddressFamily.InterNetworkV6)
+                {
+                    _listener.Server.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+                }
                 _listening = true;
                 _thread = new Thread(ListenLoop)
                 {

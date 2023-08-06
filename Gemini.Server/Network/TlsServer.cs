@@ -69,7 +69,7 @@ namespace Gemini.Server.Network
             _logger.LogDebug("Chosen ALPN: {alpn}", _stream.NegotiatedApplicationProtocol.ToString());
         }
 
-        public void ServerAuth(IDictionary<string, X509Certificate> hostCertList)
+        public void ServerAuth(IDictionary<string, X509Certificate2> hostCertList)
         {
             if (hostCertList is null)
             {
@@ -101,6 +101,7 @@ namespace Gemini.Server.Network
                 }
                 if (
                     hostCertList.TryGetValue(hostName.ToUpper(), out var cert) ||
+                    hostCertList.TryGetValue("*." + hostName.ToUpper(), out cert) ||
                     hostCertList.TryGetValue("*", out cert))
                 {
                     _logger.LogInformation("Chosen certificate: {subject}", cert.Subject);
@@ -109,10 +110,10 @@ namespace Gemini.Server.Network
                 _logger.LogInformation("Host name not found. Using first certificate");
                 return hostCertList.First().Value;
             }
+
             var opt = new SslServerAuthenticationOptions()
             {
                 ClientCertificateRequired = true,
-                EnabledSslProtocols = SslProtocols.Tls13,
                 EncryptionPolicy = EncryptionPolicy.RequireEncryption,
                 RemoteCertificateValidationCallback = ProcessClientCert,
                 ServerCertificateSelectionCallback = localCert,
