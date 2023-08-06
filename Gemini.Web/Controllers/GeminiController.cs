@@ -46,21 +46,25 @@ namespace Gemini.Web.Controllers
                 }
                 content = await _geminiService.GetContentAsync(url, cert);
             }
+            catch (SslException ex)
+            {
+                if (ex.InnerException is UnknownCertificateException certEx)
+                {
+                    content = CreateTrustRequest(url, certEx.Certificate);
+                }
+                else
+                {
+                    //Generic SSL error
+                    content = new GeminiResponseModel(GeminiResponseModel.InternalErrors.GenericError,
+                        "PROTOCOL VIOLATION")
+                    {
+                        Content = $"## Connection status:\r\n{_geminiService.CurrentState}\r\n" + CombineExceptionMessages(ex)
+                    };
+                }
+            }
             catch (UnknownCertificateException ex)
             {
-                content = new GeminiResponseModel(GeminiResponseModel.InternalErrors.UnknownCertificate,
-                    "application/pkcs8")
-                {
-                    Content = new
-                    {
-                        Host = $"{url.Host}:{(url.Port <= 0 ? GeminiService.DefaultPort : url.Port)}",
-                        SubjectName = ex.Certificate.Subject,
-                        Id = ex.Certificate.Thumbprint.ToUpper(),
-                        IssuerName = ex.Certificate.Issuer,
-                        Expires = ex.Certificate.NotAfter.ToUniversalTime(),
-                        Certificate = ex.Certificate.GetRawCertData()
-                    }
-                };
+                content = CreateTrustRequest(url, ex.Certificate);
             }
             catch (Exception ex)
             {
@@ -151,7 +155,7 @@ namespace Gemini.Web.Controllers
             }
             catch (UnknownCertificateException ex)
             {
-                return BadRequest("The supplied certificate cannot be found or decoded. " + ex.Message);
+                return BadRequest("The server certificate is not trusted. " + ex.Message);
             }
             catch (Exception ex)
             {
@@ -191,6 +195,23 @@ namespace Gemini.Web.Controllers
                 }
             }
             return string.Join("\r\n", msg);
+        }
+
+        private static GeminiResponseModel CreateTrustRequest(Uri url, X509Certificate2 cert)
+        {
+            return new GeminiResponseModel(GeminiResponseModel.InternalErrors.UnknownCertificate,
+                "application/pkcs8")
+            {
+                Content = new
+                {
+                    Host = $"{url.Host}:{(url.Port <= 0 ? GeminiService.DefaultPort : url.Port)}",
+                    SubjectName = cert.Subject,
+                    Id = cert.Thumbprint.ToUpper(),
+                    IssuerName = cert.Issuer,
+                    Expires = cert.NotAfter.ToUniversalTime(),
+                    Certificate = cert.GetRawCertData()
+                }
+            };
         }
 
         private static IEnumerable<string> GetCodeLinesFromStack(string? stack)
