@@ -2,8 +2,14 @@
 
 namespace Gemini.Lib.Network
 {
+    /// <summary>
+    /// Handles CIDR addresses
+    /// </summary>
     public static class CidrDecoder
     {
+        /// <summary>
+        /// Possible masks per octet
+        /// </summary>
         private static readonly Dictionary<int, int> maskMap = new()
         {
             { 0b00000000, 0 },
@@ -16,7 +22,70 @@ namespace Gemini.Lib.Network
             { 0b11111110, 7 },
             { 0b11111111, 8 },
         };
+        /// <summary>
+        /// Inverse of <see cref="maskMap"/>
+        /// </summary>
+        private static readonly byte[] reverseMap = new byte[]
+        {
+            0b00000000,
+            0b10000000,
+            0b11000000,
+            0b11100000,
+            0b11110000,
+            0b11111000,
+            0b11111100,
+            0b11111110,
+            0b11111111,
+        };
 
+        private static readonly byte[][] v6Mask;
+        private static readonly byte[][] v4Mask;
+
+        static CidrDecoder()
+        {
+            //Initialize v4 masks
+            v4Mask = new byte[33][];
+            for (var i = 0; i < v4Mask.Length; i++)
+            {
+                var cidr = i;
+                var data = new byte[4];
+                int j = 0;
+                while (cidr > 0)
+                {
+                    data[j++] = reverseMap[Math.Min(8, cidr)];
+                    cidr -= 8;
+                }
+                v4Mask[i] = data;
+            }
+
+
+            //Initialize v6 masks
+            v6Mask = new byte[129][];
+            for (var i = 0; i < v6Mask.Length; i++)
+            {
+                var cidr = i;
+                var data = new byte[16];
+                int j = 0;
+                while (cidr > 0)
+                {
+                    data[j++] = reverseMap[Math.Min(8, cidr)];
+                    cidr -= 8;
+                }
+                v6Mask[i] = data;
+            }
+        }
+
+        /// <summary>
+        /// Get the CIDR mask using the given address range
+        /// </summary>
+        /// <param name="lower">Lower IP address</param>
+        /// <param name="upper">Upper IP address</param>
+        /// <returns>CIDR mask</returns>
+        /// <remarks>
+        /// This requires that <paramref name="lower"/> and <paramref name="upper"/>
+        /// form the lower and upper address of a range that exactly fits a CIDR mask.
+        /// Throws otherwise
+        /// </remarks>
         public static int GetCidrMask(IPAddress lower, IPAddress upper)
         {
             var bLow = (lower.IsIPv4MappedToIPv6 ? lower.MapToIPv4() : lower).GetAddressBytes();
@@ -29,11 +98,12 @@ namespace Gemini.Lib.Network
             }
             for (var i = 0; i < bLow.Length; i++)
             {
+                //Shortcut for when entire bytes are identical
                 if (bLow[i] == bHigh[i])
                 {
                     if (hasPartMask)
                     {
-                        throw new FormatException("The IP addresses are not the lower and upper address of a valid CIDR mask");
+                        throw new FormatException($"The IP addresses are not the lower and upper address of a valid CIDR mask. Failed at byte offset '{i}'");
                     }
                     mask += 8;
                 }
@@ -43,7 +113,7 @@ namespace Gemini.Lib.Network
                     var part = (byte)~(bLow[i] ^ bHigh[i]);
                     if (!maskMap.TryGetValue(part, out int maskAdd))
                     {
-                        throw new FormatException("Supplied addresses yield an invalid CIDR mask");
+                        throw new FormatException($"Supplied addresses yield an invalid CIDR mask. Failed at byte offset '{i}'");
                     }
                     mask += maskAdd;
                 }
@@ -51,6 +121,12 @@ namespace Gemini.Lib.Network
             return mask;
         }
 
+        /// <summary>
+        /// Gets the lowest address given the supplied address and mask
+        /// </summary>
+        /// <param name="addr">IP address</param>
+        /// <param name="cidr">CIDR</param>
+        /// <returns>Lowest address after masking <paramref name="addr"/> with <paramref name="cidr"/></returns>
         public static IPAddress GetCidrLowerAddress(IPAddress addr, int cidr)
         {
             if (addr is null)
@@ -83,6 +159,12 @@ namespace Gemini.Lib.Network
             return new IPAddress(outBytes);
         }
 
+        /// <summary>
+        /// Gets the highest address given the supplied address and mask
+        /// </summary>
+        /// <param name="addr">IP address</param>
+        /// <param name="cidr">CIDR</param>
+        /// <returns>Highest address after masking <paramref name="addr"/> with <paramref name="cidr"/></returns>
         public static IPAddress GetCidrUpperAddress(IPAddress addr, int cidr)
         {
             if (addr is null)
@@ -117,6 +199,21 @@ namespace Gemini.Lib.Network
                 }
             }
             return new IPAddress(outBytes);
+        }
+
+        /// <summary>
+        /// Converts a CIDR mask into a subnet mask
+        /// </summary>
+        /// <param name="cidr">CIDR</param>
+        /// <param name="ipv6">Use IPv6</param>
+        /// <returns>Subnet mask</returns>
+        public static IPAddress CidrToAddress(int cidr, bool ipv6)
+        {
+            if (cidr < 0 || (!ipv6 && cidr > 32) || (ipv6 && cidr > 128))
+            {
+                throw new ArgumentOutOfRangeException(nameof(cidr));
+            }
+            return new IPAddress(ipv6 ? v6Mask[cidr] : v4Mask[cidr]);
         }
     }
 }
