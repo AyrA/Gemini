@@ -1,5 +1,8 @@
 ﻿namespace Gemini.Lib
 {
+    /// <summary>
+    /// All known gemini status codes
+    /// </summary>
     public enum StatusCode
     {
         /// <summary>

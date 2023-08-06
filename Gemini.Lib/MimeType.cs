@@ -3,13 +3,29 @@ using System.Text.RegularExpressions;
 
 namespace Gemini.Lib
 {
+    /// <summary>
+    /// Provides Mime type translation
+    /// </summary>
     public class MimeType
     {
+        /// <summary>
+        /// Name of the resource file
+        /// </summary>
         private const string ResName = "Gemini.Lib.mime.txt";
+
+        /// <summary>
+        /// Default type if none can be determined
+        /// </summary>
         public const string DefaultType = "application/octet-stream";
 
+        /// <summary>
+        /// Mime type map
+        /// </summary>
         private static readonly Dictionary<string, string> mimeMap = new();
 
+        /// <summary>
+        /// Initializes the mime type map
+        /// </summary>
         static MimeType()
         {
             var a = Assembly.GetExecutingAssembly();
@@ -32,6 +48,12 @@ namespace Gemini.Lib
             mimeMap["gmi"] = "text/gemini";
         }
 
+        /// <summary>
+        /// Build a mime type line from the given arguments
+        /// </summary>
+        /// <param name="mimeType">Mime type</param>
+        /// <param name="properties">Extra attributes</param>
+        /// <returns>Formatted mime type line</returns>
         public static string BuildMimeLine(string mimeType, IDictionary<string, string>? properties = null)
         {
             if (string.IsNullOrWhiteSpace(mimeType))
@@ -47,6 +69,11 @@ namespace Gemini.Lib
             return mimeType + "; " + string.Join("; ", properties.Select(m => $"{EscapeKey(m.Key)}={EscapeValue(m.Value)}"));
         }
 
+        /// <summary>
+        /// Gets a matching mime type for the given file name
+        /// </summary>
+        /// <param name="fileNameOrExtension">File name, or just the extension (leading dot optional)</param>
+        /// <returns>Mime type, or <see cref="DefaultType"/> if none can be found</returns>
         public static string GetMimeType(string fileNameOrExtension)
         {
             if (string.IsNullOrEmpty(fileNameOrExtension))
@@ -61,6 +88,11 @@ namespace Gemini.Lib
             return mimeMap.TryGetValue(ext, out var mime) ? mime : DefaultType;
         }
 
+        /// <summary>
+        /// Escapes a mime type key
+        /// </summary>
+        /// <param name="key">Key</param>
+        /// <returns>Escaped key</returns>
         private static string EscapeKey(string key)
         {
             if (string.IsNullOrEmpty(key))
@@ -71,6 +103,11 @@ namespace Gemini.Lib
             return Uri.EscapeDataString(key);
         }
 
+        /// <summary>
+        /// Escapes a mime type value
+        /// </summary>
+        /// <param name="value">Value</param>
+        /// <returns>Escaped value</returns>
         private static string EscapeValue(string value)
         {
             if (string.IsNullOrEmpty(value))

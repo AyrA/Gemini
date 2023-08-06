@@ -93,6 +93,9 @@ namespace Gemini.Lib.Services
             }
         }
 
+        /// <summary>
+        /// DI
+        /// </summary>
         public LimiterService() { }
 
         /// <summary>

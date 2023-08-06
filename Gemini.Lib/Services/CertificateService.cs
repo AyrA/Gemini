@@ -7,31 +7,45 @@ using System.Text.RegularExpressions;
 
 namespace Gemini.Lib.Services
 {
+    /// <summary>
+    /// Provides means to work with certificates
+    /// </summary>
     [AutoDIRegister(AutoDIType.Singleton)]
     public class CertificateService
     {
-        /// <summary>
-        /// Setting this to false falls back to RSA certificates
-        /// </summary>
-        /// <remarks>Do not change this. "false" is currently not implemented</remarks>
-        private static readonly bool useEcc = true;
-
         /// <summary>
         /// Maximum name length as per X509
         /// </summary>
         public const int MaxNameLength = 64;
 
+        /// <summary>
+        /// Encryption parameters for private keys
+        /// </summary>
         private static readonly PbeParameters encParams = new(
             PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000);
         private readonly ILogger<CertificateService> _logger;
 
+        /// <summary>
+        /// DI
+        /// </summary>
+        /// <param name="logger">Logger instance</param>
         public CertificateService(ILogger<CertificateService> logger)
         {
             _logger = logger;
         }
 
+        /// <summary>
+        /// Checks if the given certificate time frame is valid
+        /// </summary>
+        /// <param name="cert">Certificate</param>
+        /// <returns>true, if is valid</returns>
         public static bool IsValid(X509Certificate cert) => IsValid((X509Certificate2)cert);
 
+        /// <summary>
+        /// Checks if the given certificate time frame is valid
+        /// </summary>
+        /// <param name="cert">Certificate</param>
+        /// <returns>true, if is valid</returns>
         public static bool IsValid(X509Certificate2 cert)
         {
             return
@@ -40,6 +54,11 @@ namespace Gemini.Lib.Services
                 && cert.NotBefore < DateTime.Now;
         }
 
+        /// <summary>
+        /// Checks if the argument is a valid SHA1 thumbprint
+        /// </summary>
+        /// <param name="thumbprint">Thumbprint</param>
+        /// <returns>true, if valid</returns>
         public static bool IsValidThumbprint(string thumbprint)
         {
             if (string.IsNullOrWhiteSpace(thumbprint))
@@ -49,8 +68,19 @@ namespace Gemini.Lib.Services
             return thumbprint.Length == 40 && Regex.IsMatch(thumbprint, @"^[\da-fA-F]+$");
         }
 
+        /// <summary>
+        /// Export the given certificate and key unencrypted to a string
+        /// </summary>
+        /// <param name="certificate">Certificate to export</param>
+        /// <returns>PEM string</returns>
         public string Export(X509Certificate2 certificate) => Export(certificate, null);
 
+        /// <summary>
+        /// Exports the given certificate and key with optional encryption to a string
+        /// </summary>
+        /// <param name="certificate">Certificate</param>
+        /// <param name="password">Encryption key for private key</param>
+        /// <returns>PEM string</returns>
         public string Export(X509Certificate2 certificate, string? password)
         {
             if (certificate is null)
@@ -110,19 +140,54 @@ namespace Gemini.Lib.Services
             return sw.ToString();
         }
 
+        /// <summary>
+        /// Create a certificate with the given name that is valid for a year
+        /// </summary>
+        /// <param name="name">Certificate name</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 CreateCertificate(string name) => CreateCertificate(name, null);
 
+        /// <summary>
+        /// Creates a certificate with the given name and SAN names that is valid for a year
+        /// </summary>
+        /// <param name="name">Certificate name</param>
+        /// <param name="san">SAN names</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 CreateCertificate(string name, IEnumerable<string>? san) => CreateCertificate(name, san, DateTime.UtcNow.Date.AddYears(1));
 
+        /// <summary>
+        /// Creates a certificate that expires at the given date
+        /// </summary>
+        /// <param name="name">Certificate name</param>
+        /// <param name="san">SAN names</param>
+        /// <param name="validTo">Expiration date</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 CreateCertificate(string name, IEnumerable<string>? san, DateTime validTo)
             => CreateCertificate(name, san, DateTime.UtcNow.Date, validTo);
 
+        /// <summary>
+        /// Creates a certificate that is valid within the given time frame
+        /// </summary>
+        /// <param name="name">Certificate name</param>
+        /// <param name="san">SAN names</param>
+        /// <param name="validFrom">Valid from this date</param>
+        /// <param name="validTo">Expiration date</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 CreateCertificate(string name, IEnumerable<string>? san, DateTime validFrom, DateTime validTo)
         {
             var key = ECDsa.Create(ECCurve.NamedCurves.nistP384);
             return CreateFromKey(name, san, validFrom, validTo, key);
         }
 
+        /// <summary>
+        /// Create a certificate using an existing key
+        /// </summary>
+        /// <param name="name">Certificate name</param>
+        /// <param name="san">SAN names</param>
+        /// <param name="validFrom">Valid from this date</param>
+        /// <param name="validTo">Expiration date</param>
+        /// <param name="existingKey">Existing ECDSA key</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 CreateFromKey(string name, IEnumerable<string>? san, DateTime validFrom, DateTime validTo, ECDsa existingKey)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -218,6 +283,12 @@ namespace Gemini.Lib.Services
             return MakeExportable(cert);
         }
 
+        /// <summary>
+        /// Deserializes PEM data into a certificate
+        /// </summary>
+        /// <param name="pemData">PEM data with certificate and private key</param>
+        /// <param name="password">Encryption password, can be null if key is unencrypted</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 ReadFromPemData(string pemData, string? password)
         {
             _logger.LogDebug("Trying to decode pem data. Use password: {usepass}", !string.IsNullOrEmpty(password));
@@ -245,12 +316,38 @@ namespace Gemini.Lib.Services
             throw new FormatException("Certificate data lacks a private key");
         }
 
+        /// <summary>
+        /// Deserializes a file that contains PKCS12 formatted data or PEM data into a certificate
+        /// </summary>
+        /// <param name="fileName">File path and name</param>
+        /// <param name="password">Encryption password, can be null if key is unencrypted</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 ReadFromFile(string fileName, string? password)
             => ReadFromPemData(File.ReadAllText(fileName), password);
 
+        /// <summary>
+        /// Gets the developer certificate. Creates it if necessary
+        /// </summary>
+        /// <returns>Certificate</returns>
+        /// <remarks>
+        /// See <see cref="CreateOrLoadDevCert(out bool)"/> for more details
+        /// </remarks>
         public X509Certificate2 CreateOrLoadDevCert()
             => CreateOrLoadDevCert(out _);
 
+        /// <summary>
+        /// Gets the developer certificate. Creates it if necessary
+        /// </summary>
+        /// <returns>Certificate</returns>
+        /// <param name="created">
+        /// true, if the certificate had to be created,
+        /// false, if an existing certificate was reused.</param>
+        /// <remarks>
+        /// The developer certificate is issued for a year,
+        /// and contains "localhost", the local host name, and the loopback IP address as SAN names.
+        /// The hostnames are also added with wildcard support.
+        /// If less than 1/3 of the lifetime is remaining, a new certificate will be created automatically.
+        /// </remarks>
         public X509Certificate2 CreateOrLoadDevCert(out bool created)
         {
             X509Certificate2? cert;
@@ -287,6 +384,13 @@ namespace Gemini.Lib.Services
             }
         }
 
+        /// <summary>
+        /// Reads a certificate from the certificate store.
+        /// This is a Windows-Only feature.
+        /// Throws if the certificate cannot be found
+        /// </summary>
+        /// <param name="thumbprint">Certificate thumbprint</param>
+        /// <returns>Certificate</returns>
         public X509Certificate2 ReadFromStore(string thumbprint)
         {
             if (!OperatingSystem.IsWindows())
@@ -307,6 +411,12 @@ namespace Gemini.Lib.Services
                 ?? throw new ArgumentException($"Certificate with thumbprint {thumbprint} could not be found");
         }
 
+        /// <summary>
+        /// Tries to get a certificate from the given store location
+        /// </summary>
+        /// <param name="thumbprint">Certificate thumbprint</param>
+        /// <param name="location">Store location</param>
+        /// <returns>Certificate if found, null otherwise</returns>
         private X509Certificate2? GetCert(string thumbprint, StoreLocation location)
         {
             using var store = new X509Store(StoreName.My, location);
@@ -328,7 +438,10 @@ namespace Gemini.Lib.Services
             return null;
         }
 
-        #region Windows Hacks
+        //Windows Crypto API will not just export every key.
+        //Especially keys that were just generated can often not be exported properly.
+        //The functions in this section make keys and certificates exportable
+        #region Windows Cert+Key Export Hacks
 
         private static X509Certificate2 MakeExportable(X509Certificate2 cert)
         {

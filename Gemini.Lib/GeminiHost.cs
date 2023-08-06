@@ -69,8 +69,8 @@ namespace Gemini.Lib
         /// <remarks>
         /// The rewritten URL replaces the passed in URL in the request pipeline for all future hosts.
         /// The default implementation is to not rewrite and return the argument as-is.
-        /// The method is called once before every call to <see cref="Request(Uri, EndPoint)"/>.
-        /// By implementing the Rewrite method but hardcoding <see cref="Request(Uri, EndPoint)"/>
+        /// The method is called once before every call to <see cref="Request(Uri, IPEndPoint, X509Certificate?)"/>.
+        /// By implementing the Rewrite method but hardcoding <see cref="Request(Uri, IPEndPoint, X509Certificate?)"/>
         /// to always return null, a gemini host can effectively be turned into a pure URL rewrite mapper.
         /// Returning null will terminate the request early.
         /// </remarks>
@@ -97,8 +97,8 @@ namespace Gemini.Lib
         /// <returns>true, if allowed, false otherwise</returns>
         /// <remarks>
         /// If this method returns true,
-        /// a call to <see cref="Rewrite(Uri)"/>
-        /// and <see cref="Request(Uri, EndPoint)"/> follows.
+        /// a call to <see cref="Rewrite(Uri, IPAddress, X509Certificate?)"/>
+        /// and <see cref="Request(Uri, IPEndPoint, X509Certificate?)"/> follows.
         /// If this returns false, the host is skipped once for this request.
         /// The default implementation accepts all requests
         /// </remarks>
