@@ -254,7 +254,7 @@ namespace Gemini.Lib.Services
         public X509Certificate2 CreateOrLoadDevCert(out bool created)
         {
             X509Certificate2? cert;
-            var certFile = Path.Combine(AppContext.BaseDirectory, "server.crt");
+            var certFile = Path.Combine(AppContext.BaseDirectory, "development.crt");
             if (File.Exists(certFile))
             {
                 using (cert = X509Certificate2.CreateFromPemFile(certFile, certFile))
