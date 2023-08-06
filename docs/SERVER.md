@@ -179,6 +179,9 @@ If you purely want to work with `Rewrite`, you can hardcode this method to retur
 This method is called at least once before the host is added to the request pipeline.
 This is the appropriate location to perform long running initialization tasks.
 
+Normally you return `true`, but if your host cannot start for some reason,
+you can return `false` to remove it from the request pipeline.
+
 ### Method: Stop
 
 This method is called at least once when it's shut down.
