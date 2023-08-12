@@ -128,7 +128,8 @@ namespace Gemini.Server
                 _logger.LogError(ex, "Request parsing failed for {address}", remoteAddress);
                 try
                 {
-                    using var br = GeminiResponse.BadRequest("Cannot parse request into a gemini URL");
+                    using var br = GeminiResponse.BadRequest("Cannot parse request into a gemini URL. "
+                        + GetStatusMessage(ex));
                     br.SendTo(authStream);
                 }
                 catch (Exception exSendErr)
@@ -180,7 +181,7 @@ namespace Gemini.Server
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Request processing of {host} for {address} failed", hostname, remoteAddress);
-                        using var se = new GeminiResponse(StatusCode.CgiError, null, ex.Message);
+                        using var se = new GeminiResponse(StatusCode.CgiError, null, GetStatusMessage(ex));
                         try
                         {
                             se.SendTo(authStream);
@@ -190,6 +191,7 @@ namespace Gemini.Server
                         {
                             _logger.LogWarning(exErr, "Unable to send error response to {address}", remoteAddress);
                         }
+                        return;
                     }
                 }
                 if (response != null)
@@ -298,6 +300,17 @@ namespace Gemini.Server
                 throw new ArgumentException($"URL contains unescaped control characters");
             }
             return new Uri(url);
+        }
+
+        private static string GetStatusMessage(Exception? ex)
+        {
+            var parts = new List<string>();
+            while (ex != null)
+            {
+                parts.Add(ex.Message);
+                ex = ex.InnerException;
+            }
+            return string.Join(" --> ", parts);
         }
 
     }
