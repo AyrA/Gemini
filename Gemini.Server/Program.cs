@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
 using Microsoft.Extensions.Logging.EventLog;
+using Plugin;
 
 internal class Program
 {
@@ -98,6 +99,9 @@ The server runs as normal console application without any arguments
         {
             GeminiHostInstaller.LoadPlugins(services);
             services.AutoRegisterAllAssemblies();
+#if DEBUG
+            services.AutoRegisterFromAssembly(typeof(MathsHost).Assembly);
+#endif
             services.AddHostedService<Service>();
             services.AddTransient((p) => services);
         });

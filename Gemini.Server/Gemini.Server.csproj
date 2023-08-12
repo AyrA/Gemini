@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -16,6 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Gemini.Lib\Gemini.Lib.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <ProjectReference Include="..\Plugin\Plugin.csproj" />
   </ItemGroup>
 
   <ItemGroup>
