@@ -8,11 +8,21 @@ while (true)
 {
     //Ask for URL
     Console.Write("URL: ");
-    var url = new Uri(new Uri("gemini://localhost/"), Console.ReadLine());
+    var host = "localhost";
+    var port = 1965;
+    var request = "";
+    var input = Console.ReadLine();
+    if (!string.IsNullOrEmpty(input))
+    {
+        var url = new Uri(new Uri("gemini://localhost/"), input);
+        host = url.DnsSafeHost;
+        port = url.Port;
+        request = url.ToString();
+    }
 
     //Connect to server
     using var cli = new TcpClient();
-    cli.Connect(Dns.GetHostAddresses(url.DnsSafeHost).First(), url.Port);
+    cli.Connect(Dns.GetHostAddresses(host).First(), port);
 
     //Do SSL
     using var ns = cli.GetStream();
@@ -21,7 +31,7 @@ while (true)
     {
         RemoteCertificateValidationCallback = delegate { return true; },
         EncryptionPolicy = EncryptionPolicy.RequireEncryption,
-        TargetHost = url.DnsSafeHost
+        TargetHost = host
     });
 
     //Send request and read response
@@ -29,6 +39,6 @@ while (true)
     using var sr = new StreamReader(ssl);
     sw.NewLine = "\r\n";
     sw.AutoFlush = true;
-    sw.WriteLine(url);
+    sw.WriteLine(request);
     Console.WriteLine(sr.ReadToEnd());
 }

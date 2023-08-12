@@ -16,6 +16,7 @@ namespace Gemini.Server
     [AutoDIRegister(AutoDIType.Transient)]
     public class GeminiRequestHandler : IDisposable
     {
+        private static readonly Uri infoUrl = new("about:info");
         private readonly ILogger<GeminiRequestHandler> _logger;
         private readonly CertificateService _certificateService;
         private readonly IServiceProvider _serverProvider;
@@ -142,7 +143,24 @@ namespace Gemini.Server
             {
                 return;
             }
-
+            if (url == infoUrl)
+            {
+                using var infoResponse = GeminiResponse.Ok(@"
+[FORM]
+multi=n
+files=n
+stream=n
+[META]
+extended=y
+[BODY]
+compress=n
+[TCP]
+keepalive=n
+raw=n
+");
+                infoResponse.SendTo(authStream);
+                return;
+            }
 
             GeminiResponse? response = null;
             _logger.LogInformation("Request URL from {address}: {url}", remoteAddress, url);
@@ -271,6 +289,10 @@ namespace Gemini.Server
                     b = source.ReadByte();
                     if (b == '\n')
                     {
+                        if (bytes.Count == 0)
+                        {
+                            return infoUrl;
+                        }
                         return ParseUrl(Encoding.UTF8.GetString(bytes.ToArray()));
                     }
                 }
