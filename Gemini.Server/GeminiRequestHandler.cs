@@ -154,6 +154,7 @@ stream=n
 extended=y
 [BODY]
 compress=n
+size=n
 [TCP]
 keepalive=n
 raw=n
@@ -194,7 +195,15 @@ raw=n
                             _logger.LogInformation("{host} set the url to null. Aborting the request", hostname);
                             return;
                         }
-                        response = host.Request(url, remoteAddress, tls.ClientCertificate).Result;
+                        if (host is IGeminiController c)
+                        {
+                            using var state = new RequestState(url, remoteAddress, tls.ClientCertificate, tls.GetStream());
+                            response = c.Request(state).Result;
+                        }
+                        else
+                        {
+                            response = host.Request(url, remoteAddress, tls.ClientCertificate).Result;
+                        }
                     }
                     catch (Exception ex)
                     {

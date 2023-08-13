@@ -37,6 +37,8 @@ namespace Gemini.Server.Network
                 _logger.LogError("Stream argument not read-writable");
                 throw new ArgumentException("Stream not read-writable", nameof(baseStream));
             }
+            //Add timeouts to prevent lost connections from lingering around for ages
+            baseStream.WriteTimeout = baseStream.ReadTimeout = 5000;
 
             _stream = new SslStream(baseStream, false);
         }

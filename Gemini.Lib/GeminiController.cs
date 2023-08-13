@@ -6,30 +6,21 @@ using System.Security.Cryptography.X509Certificates;
 namespace Gemini.Lib
 {
     /// <summary>
-    /// Changes the name of a controller away from the default
+    /// Holds public methods that do not depend on the generic type
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class)]
-    public class ControllerNameAttribute : Attribute
+    public interface IGeminiController
     {
         /// <summary>
-        /// Name of the controller
+        /// Calls the mapped controller method of the generic type instance
         /// </summary>
-        public string ControllerName { get; }
-
-        /// <summary>
-        /// Renames a controller
-        /// </summary>
-        public ControllerNameAttribute(string controllerName)
-        {
-            ControllerName = controllerName;
-        }
+        Task<GeminiResponse?> Request(RequestState state);
     }
 
     /// <summary>
     /// Wrapper for a GeminiHost that acts as a controller with 
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class GeminiController<T> : GeminiHost where T : GeminiHost
+    public class GeminiController<T> : GeminiHost, IGeminiController where T : GeminiHost
     {
         private bool running;
         private readonly string _controllerName;
@@ -108,50 +99,66 @@ namespace Gemini.Lib
         }
 
         /// <summary>
-        /// Calls the same method of the <typeparamref name="T"/> instance
+        /// Calls the mapped controller method of the <typeparamref name="T"/> instance
         /// </summary>
         public override Task<GeminiResponse?> Request(Uri url, IPEndPoint clientAddress, X509Certificate? clientCertificate)
         {
+            using var state = new RequestState(url, clientAddress, clientCertificate, null);
+            return Request(state);
+        }
+
+        /// <summary>
+        /// Calls the mapped controller method of the <typeparamref name="T"/> instance
+        /// </summary>
+        public async Task<GeminiResponse?> Request(RequestState state)
+        {
             if (running)
             {
-                var funcName = url.PathAndQuery[(url.PathAndQuery.IndexOf('/', 1) + 1)..];
+                var funcName = state.Url.PathAndQuery[(state.Url.PathAndQuery.IndexOf('/', 1) + 1)..];
                 funcName = funcName[..funcName.IndexOfAny("/?#".ToCharArray())];
                 var m = typeof(T).GetMethod(funcName, BindingFlags.IgnoreCase | BindingFlags.Instance | BindingFlags.Public);
                 if (m != null)
                 {
                     if (m.ReturnType == typeof(Task<GeminiResponse?>))
                     {
-                        var result = m.Invoke(_instance, ConstructArguments(m, url, clientAddress, clientCertificate));
-                        if (result != null)
+                        if (m.Invoke(_instance, await ConstructArgumentsAsync(m, state)) is Task<GeminiResponse?> result)
                         {
-                            return (Task<GeminiResponse?>)result;
+                            return await result;
                         }
-                        return Task.FromResult<GeminiResponse?>(null);
+                        return null;
                     }
                 }
                 else
                 {
-                    return _instance.Request(url, clientAddress, clientCertificate);
+                    return await _instance.Request(state.Url, state.ClientAddress, state.ClientCertificate);
                 }
             }
-            return Task.FromResult<GeminiResponse?>(null);
+            return null;
         }
 
-        private object?[] ConstructArguments(MethodInfo method, Uri url, IPEndPoint clientAddress, X509Certificate? clientCertificate)
+        private async Task<object?[]> ConstructArgumentsAsync(MethodInfo method, RequestState state)
         {
             //Add all known static arguments
             var known = new Dictionary<Type, object?>
             {
                 [typeof(GeminiController<T>)] = this,
+                [typeof(IGeminiController)] = this,
                 [typeof(T)] = _instance,
-                [typeof(Uri)] = url,
-                [typeof(IPEndPoint)] = clientAddress,
-                [typeof(X509Certificate)] = clientCertificate
+                [typeof(Uri)] = state.Url,
+                [typeof(IPEndPoint)] = state.ClientAddress,
+                [typeof(IPAddress)] = state.ClientAddress.Address,
+                [typeof(X509Certificate)] = state.ClientCertificate,
+                [typeof(Stream)] = state.DataStream
             };
 
             //Add all dynamic arguments
-            var query = string.IsNullOrWhiteSpace(url.Query) ? null : Uri.UnescapeDataString(url.Query[1..]);
+            var query = string.IsNullOrWhiteSpace(state.Url.Query) ? null : state.Url.Query[1..];
             known[typeof(string)] = query;
+            known[typeof(FormData)] = state.Form;
+            known[typeof(FileDataCollection)] = state.Files;
+
+            //Extract files from stream
+            await state.LoadFiles();
 
             var args = method.GetParameters();
             var ret = new object?[args.Length];

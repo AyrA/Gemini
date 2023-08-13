@@ -4,6 +4,8 @@ using System.Net.Sockets;
 
 //Register gemini
 UriParser.Register(new HttpStyleUriParser(), "gemini", 1965);
+UriParser.Register(new HttpStyleUriParser(), "gemini+", 1965);
+
 while (true)
 {
     //Ask for URL
