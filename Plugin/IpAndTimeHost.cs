@@ -1,5 +1,6 @@
 ﻿using AyrA.AutoDI;
 using Gemini.Lib;
+using Gemini.Lib.Data;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;

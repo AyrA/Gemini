@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace Gemini.Lib
+namespace Gemini.Lib.Data
 {
     /// <summary>
     /// Represents an uploaded file

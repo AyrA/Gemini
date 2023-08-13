@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Gemini.Lib
+namespace Gemini.Lib.Data
 {
     /// <summary>
     /// Represents the response to a gemini request

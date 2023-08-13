@@ -1,6 +1,6 @@
 ﻿using System.Collections;
 
-namespace Gemini.Lib
+namespace Gemini.Lib.Data
 {
     /// <summary>
     /// Represents a collection of string values that can also behave like a single string

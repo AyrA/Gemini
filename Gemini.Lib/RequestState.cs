@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Gemini.Lib.Data;
+using System.Collections;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 
@@ -56,11 +57,11 @@ namespace Gemini.Lib
             DataStream = dataStream;
             if (!string.IsNullOrWhiteSpace(url.Query) && url.Query.Length > 1)
             {
-                Form = new FormData(url.Query);
+                Form = new FormData(url.Query, dataStream);
             }
             else
             {
-                Form = new FormData(null);
+                Form = new FormData(null, dataStream);
             }
             tempFilePath = Path.Combine(Path.GetTempPath(), Id.ToString());
             Files = new FileDataCollection();

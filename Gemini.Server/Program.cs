@@ -1,4 +1,5 @@
 ﻿using AyrA.AutoDI;
+using Gemini.Lib;
 using Gemini.Server;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,8 +46,7 @@ The server runs as normal console application without any arguments
 
         //Register Gemini URI scheme with the HTTP handler because it's similar.
         //Gemini lacks the URI fragment but we don't care.
-        UriParser.Register(new HttpStyleUriParser(), "gemini", 1965);
-        UriParser.Register(new HttpStyleUriParser(), "gemini+", 1965);
+        UrlExtensions.RegisterGeminiScheme();
 
         if (parser.IsInstall)
         {

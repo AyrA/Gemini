@@ -1,5 +1,6 @@
 ﻿using AyrA.AutoDI;
 using Gemini.Lib;
+using Gemini.Lib.Data;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -89,6 +90,75 @@ namespace Plugin
             }
             var n = Numbers.Parse(query);
             return Task.FromResult(GeminiResponse.Ok((n.A / n.B).ToString()));
+        }
+
+        public Task<GeminiResponse> Calc(FormData fd)
+        {
+            var dblA = 0.0;
+            var dblB = 0.0;
+            StringValues? op = null;
+
+            var ok = fd.TryGetValue("A", out var numA) &&
+                fd.TryGetValue("B", out var numB) &&
+                fd.TryGetValue("Operator", out op) &&
+                !string.IsNullOrEmpty(op) &&
+                double.TryParse(numA, out dblA) &&
+                double.TryParse(numB, out dblB) &&
+                double.IsFinite(dblA) &&
+                double.IsFinite(dblB) &&
+                !double.IsNaN(dblA) &&
+                !double.IsNaN(dblB) &&
+                "+-*/".Contains(op);
+            if (ok && op != null)
+            {
+                var result = 0.0;
+                switch (op)
+                {
+                    case "+":
+                        result = dblA + dblB; break;
+                    case "-":
+                        result = dblA - dblB; break;
+                    case "*":
+                        result = dblA * dblB; break;
+                    case "/":
+                        result = dblA / dblB; break;
+                }
+                return Task.FromResult(GeminiResponse.Ok("# Result: " + result.ToString()));
+            }
+            var f = new Form
+            {
+                new FormField()
+                {
+                    Name = "A",
+                    Title = "First operand (A)",
+                    Description = "Enter the first value here",
+                    Required = true,
+                },
+                new FormField()
+                {
+                    Name = "Operator",
+                    Title = "Operator",
+                    Required = true,
+                    DefaultValue = "+"
+                },
+                new FormField()
+                {
+                    Name = "B",
+                    Title = "Second operand (B)",
+                    Description = "Enter the second value here",
+                    Required = true
+                }
+            };
+            var operatorField = f[1];
+
+            operatorField.Options.Add("+", "A+B");
+            operatorField.Options.Add("-", "A-B");
+            operatorField.Options.Add("*", "A*B");
+            operatorField.Options.Add("/", "A/B");
+
+            f.MaxSize = 100;
+
+            return Task.FromResult(f.ToResponse());
         }
 
         public override void Dispose()

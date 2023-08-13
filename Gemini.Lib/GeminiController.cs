@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Gemini.Lib.Data;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
@@ -115,7 +116,11 @@ namespace Gemini.Lib
             if (running)
             {
                 var funcName = state.Url.PathAndQuery[(state.Url.PathAndQuery.IndexOf('/', 1) + 1)..];
-                funcName = funcName[..funcName.IndexOfAny("/?#".ToCharArray())];
+                var endIndex = funcName.IndexOfAny("/?#".ToCharArray());
+                if (endIndex > 0)
+                {
+                    funcName = funcName[..endIndex];
+                }
                 var m = typeof(T).GetMethod(funcName, BindingFlags.IgnoreCase | BindingFlags.Instance | BindingFlags.Public);
                 if (m != null)
                 {
