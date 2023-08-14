@@ -77,6 +77,7 @@ namespace Gemini.Lib.Data
         /// <exception cref="InvalidOperationException">Not a file</exception>
         public FileData GetAsFile(string key)
         {
+            //TODO: Support multiple files with the same field name
             if (
                 data.TryGetValue(key, out var fileName) &&
                 data.TryGetValue(key + ".index", out var streamIndex) &&
