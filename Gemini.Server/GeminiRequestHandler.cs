@@ -159,7 +159,7 @@ size=n
 [TCP]
 keepalive=n
 raw=n
-");
+", "text/gemini+info; charset=utf-8");
                 infoResponse.SendTo(authStream);
                 return;
             }
