@@ -195,6 +195,63 @@ but this may be called multiple times.
 
 This method is an appropriate location to clean up unmanaged resources.
 
+## Controllers
+
+The host pattern above is sufficient for small applications.
+For larger applications, or more complex request patterns,
+you can switch your existing host to the controller model.
+Rather than funnel all requests through the same `Request(...)` method,
+the controller evaluates the URL and calls the method that matches the given name from the URL.
+
+To do so, declare a function in your host as follows (where "MyHost" is the type of your host class):
+
+```C#
+public static IServiceCollection Register(IServiceCollection collection)
+{
+	return collection
+		.AddSingleton<GeminiController<MyHost>>();
+}
+```
+
+Then add an additional AutoDIRegister attribute as follows:
+
+`[AutoDIRegister(AutoDIType.Singleton, null, nameof(Register))]`
+
+Your host will now be loaded as a controller.
+The Name of the controller will be the first path segment of the URL,
+the function name the second segment.
+If no matching public method can be found,
+it calls `Request()` like it would for normal hosts.
+
+### Function Arguments
+
+Controller functions can accept a variety of arguments.
+
+The following argument types are available:
+
+*"T" refers to the current host type*
+
+- **GeminiController<T>**: The current instance
+- **IGeminiController**: The current instance
+- **T**: The current instance
+- **Guid**: Unique request id
+- **Uri**: The full request URL
+- **IPEndPoint**: The remote endpoint of the TCP connection
+- **IPAddress**: The remote IP address
+- **X509Certificate**: The certificate for the client authentication (may be null if not authenticated)
+- **Stream**: The underlying request stream
+- **string**: The query string as sent by the client (still URL escaped)
+- **FormData**: Decoded Gemini+ form data
+- **FileDataColledtion**: Decoded Gemini+ uploaded files
+
+Note: Using the same type in multiple arguments will supply duplicate values.
+Other arguments are not supported and will throw an exception.
+
+Using the `Stream` type argument is not recommended,
+as it's easy to create invalid gemini responses this way.
+But it can be useful if this gemini host acts as a proxy server,
+because it allows easy data copy with `Stream.CopyToAsync(...)`
+
 ## Creating Plugins
 
 **The plugin system is still under development,**
