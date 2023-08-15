@@ -1,5 +1,6 @@
 {
     "Id": "617FA9B6-0C3F-47EE-A43A-00BA53F06E8B",
-    "Name": "Example Plugin that answers requests to /time and /ip",
-    "Version": "1.0.0"
+    "Name": "Example Plugin",
+    "Version": "1.0.0",
+    "MainFile": "Plugin.dll"
 }
