@@ -254,15 +254,10 @@ because it allows easy data copy with `Stream.CopyToAsync(...)`
 
 ## Creating Plugins
 
-**The plugin system is still under development,**
-**and the information below does not represent the current state of the server.**
-
 To create a plugin, you want to zip at least two files.
 
 The first file is your plugin dll in the output directory.
 It's usually named identically to the project.
-Rename this file to `Plugin.dll` before zipping it,
-or rename it inside of the zip file afterwards.
 
 The second file is an `info.json` with the following content:
 
@@ -271,6 +266,7 @@ The second file is an `info.json` with the following content:
 	"Id": "VVVVVVVV-WWWW-XXXX-YYYY-ZZZZZZZZZZZZ",
 	"Version": "0.0.1",
 	"Preserve": ["config.json"]
+	"MainFile": "Filename.dll"
 }
 ```
 
@@ -306,6 +302,12 @@ Because of this, you don't need do know in advance which files you want to prese
 before you create your first update.
 
 This field is optional.
+
+### Field: MainFile
+
+This is the main DLL file for your plugin.
+This file is loaded and fed through the automatic dependency injection code
+when the server loads plugins.
 
 ## Plugin references
 

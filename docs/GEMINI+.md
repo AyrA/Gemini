@@ -117,6 +117,7 @@ Known values:
 - **Size**: Size of the body data in bytes (see BODY section for details). Useful for progress indicators or file transfer verification
 - **LastModified**: ISO 8601 timestamp of when the resource was last modified. If the file is downloaded to disk, this value should be set on the file, provided it's within the range supported by the file system, and not in the future.
 - **Filename**: Suggested file name for file downloads. Clients should remove path information from this, and sanitize the file name to make it valid. Suggestion is to replace invalid characters with `_`
+- **Range**: For range requests (see BODY section for details) the byte range of the content that's sent to the client
 
 Values containing whitespace should be enclosed in double quotes.
 
@@ -131,7 +132,7 @@ Features considering the format and capabilities of the response body
 
 Boolean, String; This can be "n" to disable,
 or a comma separated list of compression algorithms supported by the server.
-Has no effect if extended META is not enabled.
+Has no effect if extended meta is not enabled.
 
 Defined at the moment are:
 
@@ -142,17 +143,67 @@ Defined at the moment are:
 If no value is reported by the client, or the requested value is not supported,
 the server MUST NOT use compression.
 The server MAY deny the request if the resource only exists in compressed format.
-The client selected algorithm is communicated back via the `body.compress` extended meta info.
+The client selected algorithm is communicated back via the `body.compress` url fragment.
+The client may inidicate support for multiple values by supplying them as comma separated list of values.
 
-#### Value: Size
+#### Value: Range
 
-Boolean; Indicates that the server supports the "size" meta attribute.
-This has no effect if the extended META setting is not enabled.
+Boolean; Indicates that the server supports range requests.
+This has no effect if the extended meta setting is not enabled.
 
-The size is always the size before any compression is applied.
-Clients should ignore invalid values and behave as if the value was not there.
-Servers may still decide to not send this value for responses,
-where the size cannot be determined in advance.
+Support for range requests for a resource can be indicated by the "Size" extended meta attribute.
+However, servers are not required to actually offer range requests when the size attribute is present.
+
+A client can request a byte range from a resource by using the fragment `body.range`
+with any number of comma separated ranges as value.
+
+A range is formatted as `offset:count` where offset and count are integers.
+Offset is the zero based byte offset from the start of the content,
+count is the number of bytes requested from offset.
+
+Offset and count may be prefixed with `-` to make them negative.
+A negative offset indicates that this offset is from the end of the content,
+rather than the start.
+A negative count indicates how many bytes before the end to stop.
+`-0` is an acceptable count value that indicates to read all remaining bytes up to the end.
+
+All values are applied to the raw size of the resource,
+before any compression is applied.
+
+**Examples with a 100 byte sized file:**
+
+- `10:20`: Skip 10 bytes, then read 20 bytes
+- `10:-20`: Skip 10 bytes, then read 70 bytes
+- `10:-0`: Skip 10 bytes, then read 90 bytes
+- `-10:3`: Skip 90 bytes, then read 3 bytes
+- `-10:-3`: Skip 90 bytes, then read 7 bytes
+
+**Examples of invalid ranges with a 100 byte sized file:**
+
+- `-10:-20`: Discarded. End of the range would be before the start
+- `90:-20`: Discarded. End of the range would be before the start
+- `120:10`: Discarded. Offset is outside of bounds
+- `20:100`: Discarded. End is outside of bounds
+
+The server MUST discard invalid ranges that land outside of the boundaries
+or are nonsensical. If not a single useful range remains,
+the full content SHOULD be sent to the client.
+
+To communicate to the client, which ranges where honored,
+the "Range" extended META attribute can be used.
+The syntax for the value is identical to the syntax in the client range request.
+The order of the ranges must match the order in which they're sent to the client.
+
+An absent "Range" attribute indicates to the client that no ranges where honored,
+and the body contains the full content.
+
+The server MAY limit the number of ranges per request.
+The server MAY reorder the ranges.
+The server MUST either match the requested range exactly or reject it entirely.
+
+A range with a computed length of zero causes no data to be sent.
+This effectively turns a range request of `0:0` into a request for the META line
+without any content. This is comparable to an HTTP "HEAD" request.
 
 ### Section: TCP
 
@@ -162,7 +213,7 @@ This section contains connection specific values
 
 Boolean; Indicates whether keepalive is supported by the server or not.
 
-If supported by the server, clients can indicate via fragment "tcp.keepalive" (no value)
+If supported by the server, clients can indicate via fragment `tcp.keepalive` (no value)
 that they're interested in using this feature.
 After a server response, the connection will stay open,
 and the client can send additional requests.
@@ -197,17 +248,24 @@ Because there are no request headers, a client can indicate a desired feature by
 The fragment is an optional part of an url and always comes last.
 It begins with `#` and is followed by freeform text.
 Under normal circumstances, a client SHOULD NOT transmit this value to the server;
-It is only supported on `gemini+` urls.
+It is only supported on `gemini+` urls, not `gemini` urls.
 
-For feature declaration, the query syntax is used.
+For feature declaration, the query style syntax is used in the fragment.
 
 Example: `gemini+://example.com/SomeUrl?a=1#tcp.keepalive&body.compress=br`
 
+- The client is using `gemini+` for this request
 - The client requests `example.com/SomeUrl` from a gemini server
-- The client is using `gemini+`
 - The client sends query value `a=1` to the server
 - The client wants the server to compress the body
 - The client wants the server to keep the connection open
+
+### Security consideration
+
+If the client is presented with a gemini+ url that contains fragment data,
+it MUST drop unknown and/or unsupported keys from the url.
+
+Being a gemini+ feature only, clients MUST remove the fragment from regular gemini urls.
 
 ## Multi Forms
 
@@ -219,4 +277,4 @@ Gemini+ is on purpose kept as compatible as possible to plain gemini.
 Because of this, no real header system like that of HTTP has been included.
 This also solves the problem of HTTP headers having grown out of proportion,
 especially the User-Agent and Cookie header.
-Using the URL only limits headers to how long of an url the server is willing to accept.
+Using the URL limits headers to how long of an url the server is willing to accept.

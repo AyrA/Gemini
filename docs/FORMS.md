@@ -20,9 +20,10 @@ The form ini consists of:
 
 ## Preamble
 
-The preamble is used to inform users of non-conforming clients,
+The preamble is used to inform users of incompatible clients,
 that the server likes to use a feature they don't support.
 In general, this can be any text that is not a valid section or setting.
+It should be valid gemini text since this is the default fallback type.
 
 Example preamble: 
 
@@ -34,12 +35,15 @@ A form may contain an empty section `[]` where global values are declared.
 
 The settings currently available are:
 
-- **maxsize**: Limits the total size of the form to the given number of bytes. This value is compared against the serialized form data, which includes the keys and the `&` delimiters. Negative values or zero indicate no size restriction. If this field is absent, there is no size restriction
+- **maxsize**: Limits the total size of the form to the given number of bytes. This value is compared against the size of all submitted files as well as the serialized form data, which includes the keys and the `&` delimiters. Negative values or zero indicate no size restriction. If this field is absent, there is no size restriction
 - **target**: The url where the form is to be sent to. If absent, the form is sent back to the current url. The url must be a gemini or gemini+ url. If a gemini url, the client should silently change it to gemini+
 
 ## Form Fields
 
 Each field begins with a section that represents the name of the field.
+The name doesn't needs to be unique.
+The name is used as the key when the form is submit.
+
 The section is then followed by one or more keys:
 
 - **type**: Type of form element (see below)
@@ -49,7 +53,8 @@ The section is then followed by one or more keys:
 - **required**: Whether the field must be filled/checked/selected by the user
 - **opt:...**: Additional field specific options
 
-Options are custom `name=value` fields that are prefixed with `opt:`
+Options are custom `name=value` fields that are prefixed with `opt:`;
+The meaning of these options depend on the field type.
 
 Title and description are optional. If not given, or empty,
 the client should not render placeholders for them.
@@ -68,16 +73,17 @@ Like TextSimple, but the input is masked
 
 ### Type: Checkbox
 
-A checkbox that the user can check. This type has options.
+A checkbox or set of checkboxes that the user can check. This type has options.
 
-Each option is a checkbox with the key being the value that is submit,
+Each option is an individual checkbox with the key being the value that is submit,
 and the value the text that's displayed to the user.
-Said text is ideally clickable to check/uncheck the checkbox.
-A checkbox always has at least one option.
-The "default" setting can be used to preselect the appropriate checkbox.
-Only one can be checked this way.
+Said text is ideally made clickable by the client to check/uncheck the checkbox.
 
-If the "required" option is set, the box must be checked for form submission
+The "default" setting can be used to preselect the appropriate checkbox.
+Only one box can be checked this way. To preselect multiple checkboxes,
+multiple form elements with the same name can be declared in the INI file.
+
+If the "required" option is set, at least one checkbox must be checked.
 
 ### Type: Radio
 
@@ -85,7 +91,8 @@ Behaves like the checkbox type, but only one option can be selected at a time.
 
 ### Type: Select
 
-Behaves like the radio type, but is shown as a drop down instead of individual radio boxes
+Behaves like the radio type, but is shown as a drop down instead of individual radio boxes.
+This element is suitable if many options are present.
 
 ### Type: File
 
