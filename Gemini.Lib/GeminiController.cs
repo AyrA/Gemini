@@ -1,5 +1,4 @@
 ﻿using Gemini.Lib.Data;
-using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
@@ -30,7 +29,7 @@ namespace Gemini.Lib
         /// <summary>
         /// DI
         /// </summary>
-        public GeminiController(IServiceProvider provider)
+        public GeminiController(T instance)
         {
             var attr = typeof(T).GetCustomAttribute<ControllerNameAttribute>();
             if (attr != null)
@@ -41,7 +40,7 @@ namespace Gemini.Lib
             {
                 _controllerName = typeof(T).Name.ToLower();
             }
-            _instance = provider.GetRequiredService<T>();
+            _instance = instance;
         }
 
         /// <summary>
@@ -149,6 +148,7 @@ namespace Gemini.Lib
                 [typeof(GeminiController<T>)] = this,
                 [typeof(IGeminiController)] = this,
                 [typeof(T)] = _instance,
+                [typeof(Guid)] = state.Id,
                 [typeof(Uri)] = state.Url,
                 [typeof(IPEndPoint)] = state.ClientAddress,
                 [typeof(IPAddress)] = state.ClientAddress.Address,
