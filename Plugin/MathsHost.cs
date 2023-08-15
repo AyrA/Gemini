@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace Plugin
 {
+    [AutoDIRegister(AutoDIType.Singleton)]
     [AutoDIRegister(AutoDIType.Singleton, null, nameof(Register))]
     [ControllerName("Maths")]
     public class MathsHost : GeminiHost
@@ -18,7 +19,7 @@ namespace Plugin
             public double B { get; private set; }
             public static Numbers Parse(string query)
             {
-                var m = Regex.Match(query, @"^\s*(\S+)\s+(\S+)\s*$");
+                var m = Regex.Match(Uri.UnescapeDataString(query), @"^\s*(\S+)\s+(\S+)\s*$");
                 if (m.Success)
                 {
                     if (
@@ -37,14 +38,14 @@ namespace Plugin
                 throw new ArgumentException("Query not in '<number><space><number>' format");
             }
         }
+
         /// <summary>
         /// DI Registration
         /// </summary>
         public static IServiceCollection Register(IServiceCollection collection)
         {
             return collection
-                .AddSingleton<GeminiController<MathsHost>>()
-                .AddSingleton<MathsHost>();
+                .AddSingleton<GeminiController<MathsHost>>();
         }
 
         private static Task<GeminiResponse> Prompt(string prompt)
