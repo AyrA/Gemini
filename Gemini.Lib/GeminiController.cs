@@ -26,6 +26,8 @@ namespace Gemini.Lib
         private readonly string _controllerName;
         private readonly T _instance;
 
+        private static readonly char[] urlSeparators = "/?#".ToCharArray();
+
         /// <summary>
         /// DI
         /// </summary>
@@ -86,7 +88,7 @@ namespace Gemini.Lib
         {
             return
                 running &&
-                url.PathAndQuery.ToLower().StartsWith($"/{_controllerName}/".ToLower()) &&
+                url.PathAndQuery.StartsWith($"/{_controllerName}/", StringComparison.InvariantCultureIgnoreCase) &&
                 _instance.IsAccepted(url, remoteAddress, clientCertificate);
         }
 
@@ -115,7 +117,7 @@ namespace Gemini.Lib
             if (running)
             {
                 var funcName = state.Url.PathAndQuery[(state.Url.PathAndQuery.IndexOf('/', 1) + 1)..];
-                var endIndex = funcName.IndexOfAny("/?#".ToCharArray());
+                var endIndex = funcName.IndexOfAny(urlSeparators);
                 if (endIndex > 0)
                 {
                     funcName = funcName[..endIndex];

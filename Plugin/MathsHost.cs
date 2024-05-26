@@ -9,17 +9,17 @@ using System.Text.RegularExpressions;
 namespace Plugin
 {
     [AutoDIRegister(AutoDIType.Singleton)]
-    [AutoDIRegister(AutoDIType.Singleton, null, nameof(Register))]
+    [AutoDIRegister(nameof(Register))]
     [ControllerName("Maths")]
-    public class MathsHost : GeminiHost
+    public partial class MathsHost : GeminiHost, IMathsHost
     {
-        private class Numbers
+        private partial class Numbers
         {
             public double A { get; private set; }
             public double B { get; private set; }
             public static Numbers Parse(string query)
             {
-                var m = Regex.Match(Uri.UnescapeDataString(query), @"^\s*(\S+)\s+(\S+)\s*$");
+                var m = TwoNumbers().Match(Uri.UnescapeDataString(query));
                 if (m.Success)
                 {
                     if (
@@ -37,6 +37,9 @@ namespace Plugin
                 }
                 throw new ArgumentException("Query not in '<number><space><number>' format");
             }
+
+            [GeneratedRegex(@"^\s*(\S+)\s+(\S+)\s*$")]
+            private static partial Regex TwoNumbers();
         }
 
         /// <summary>

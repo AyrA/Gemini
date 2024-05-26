@@ -12,10 +12,7 @@
             {
                 throw new ArgumentException("Cannot use Nullguid");
             }
-            if (model is null)
-            {
-                throw new ArgumentNullException(nameof(model));
-            }
+            ArgumentNullException.ThrowIfNull(model);
 
             Id = id;
             Name = model.Name;

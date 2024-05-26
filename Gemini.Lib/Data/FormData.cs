@@ -7,7 +7,7 @@ namespace Gemini.Lib.Data
     /// <summary>
     /// Holds form data supplied by the client
     /// </summary>
-    public class FormData
+    public partial class FormData
     {
         private readonly Dictionary<string, StringValues> data = new(StringComparer.InvariantCultureIgnoreCase);
 
@@ -156,10 +156,10 @@ namespace Gemini.Lib.Data
             data.Clear();
             if (string.IsNullOrWhiteSpace(query))
             {
-                Keys = Array.Empty<string>();
+                Keys = [];
                 return;
             }
-            var r = new Regex(@"^([^=]*)=(.*)$");
+            var r = QueryParser();
             foreach (var part in query[1..].Split('&'))
             {
                 var m = r.Match(part);
@@ -169,7 +169,7 @@ namespace Gemini.Lib.Data
                     var value = Uri.UnescapeDataString(m.Groups[2].Value);
                     if (!data.TryGetValue(key, out var existing))
                     {
-                        existing = new StringValues();
+                        existing = [];
                         data.Add(key, existing);
                     }
                     existing.Add(value);
@@ -179,7 +179,7 @@ namespace Gemini.Lib.Data
                     //Add a key with empty string values if it doesn't exists.
                     if (!data.TryGetValue(part, out var empty))
                     {
-                        empty = new StringValues();
+                        empty = [];
                     }
                     data.Add(part, empty);
                 }
@@ -192,8 +192,11 @@ namespace Gemini.Lib.Data
                 allKeys.Remove($"{k}.index");
                 allKeys.Remove($"{k}.size");
             }
-            Keys = allKeys.ToArray();
+            Keys = [.. allKeys];
             IsFormDataInBody = Keys.Length == 1 && IsFile(Keys[0]) && GetAsFile(Keys[0]).Index == 0;
         }
+
+        [GeneratedRegex(@"^([^=]*)=(.*)$")]
+        private static partial Regex QueryParser();
     }
 }

@@ -2,22 +2,12 @@
 
 namespace Gemini.Web.Models
 {
-    public class CertificateInfoViewModel
+    public class CertificateInfoViewModel(CertificateInfo info)
     {
-        public string Name { get; }
-        public string Id { get; }
-        public DateTime ValidFrom { get; }
-        public DateTime ValidUntil { get; }
-        public bool Encrypted { get; }
-
-        public CertificateInfoViewModel(CertificateInfo info)
-        {
-            //Try to extract thecommon name, but if that fails (the field is actually optional) use the full name.
-            Name = Regex.Match(info.FriendlyName, "CN=([^,]+)").Groups?[1]?.Value?.Trim() ?? info.FriendlyName;
-            Id = info.Id;
-            ValidFrom = info.ValidFrom;
-            ValidUntil = info.ValidUntil;
-            Encrypted = info.Encrypted;
-        }
+        public string Name { get; } = Regex.Match(info.FriendlyName, "CN=([^,]+)").Groups?[1]?.Value?.Trim() ?? info.FriendlyName;
+        public string Id { get; } = info.Id;
+        public DateTime ValidFrom { get; } = info.ValidFrom;
+        public DateTime ValidUntil { get; } = info.ValidUntil;
+        public bool Encrypted { get; } = info.Encrypted;
     }
 }

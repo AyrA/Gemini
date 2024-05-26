@@ -8,19 +8,14 @@ using System.Security.Cryptography.X509Certificates;
 namespace Gemini.Server.Network
 {
     [AutoDIRegister(AutoDIType.Transient)]
-    public class TlsServer : IDisposable
+    public class TlsServer(ILogger<TlsServer> logger) : IDisposable
     {
         private SslStream? _stream;
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = logger;
 
         public X509Certificate2? ClientCertificate { get; private set; }
 
         public bool RequireClientCertificate { get; set; }
-
-        public TlsServer(ILogger<TlsServer> logger)
-        {
-            _logger = logger;
-        }
 
         public void SetConnection(Socket s)
             => SetConnection(new NetworkStream(s, true));
@@ -65,7 +60,7 @@ namespace Gemini.Server.Network
                 EncryptionPolicy = EncryptionPolicy.RequireEncryption,
                 ServerCertificate = certFix,
                 RemoteCertificateValidationCallback = ProcessClientCert,
-                ApplicationProtocols = new() { new SslApplicationProtocol("GEMINI") }
+                ApplicationProtocols = [new SslApplicationProtocol("GEMINI")]
             };
             _stream.AuthenticateAsServer(opt);
             _logger.LogDebug("Chosen ALPN: {alpn}", _stream.NegotiatedApplicationProtocol.ToString());
@@ -73,10 +68,7 @@ namespace Gemini.Server.Network
 
         public void ServerAuth(IDictionary<string, X509Certificate2> hostCertList)
         {
-            if (hostCertList is null)
-            {
-                throw new ArgumentNullException(nameof(hostCertList));
-            }
+            ArgumentNullException.ThrowIfNull(hostCertList);
             if (hostCertList.Count == 0)
             {
                 throw new ArgumentException("Certificate list cannot be empty");
@@ -119,7 +111,7 @@ namespace Gemini.Server.Network
                 EncryptionPolicy = EncryptionPolicy.RequireEncryption,
                 RemoteCertificateValidationCallback = ProcessClientCert,
                 ServerCertificateSelectionCallback = localCert,
-                ApplicationProtocols = new() { new SslApplicationProtocol("GEMINI") }
+                ApplicationProtocols = [new SslApplicationProtocol("GEMINI")]
             };
             _stream.AuthenticateAsServer(opt);
             _logger.LogDebug("Chosen ALPN: {alpn}", _stream.NegotiatedApplicationProtocol.ToString());

@@ -9,15 +9,8 @@ namespace Gemini.Web.Controllers
     /// Handles authentication of the current user against a gemini server
     /// </summary>
     [ApiController, Route("[controller]/[action]/{id}"), EnableCors("API")]
-    public class IdentityController : Controller
+    public class IdentityController(CertificateProviderService certificateProvider) : Controller
     {
-        private readonly CertificateProviderService _certificateProvider;
-
-        public IdentityController(CertificateProviderService certificateProvider)
-        {
-            _certificateProvider = certificateProvider;
-        }
-
         /// <summary>
         /// Get the list of all certificates
         /// </summary>
@@ -25,12 +18,11 @@ namespace Gemini.Web.Controllers
         [HttpGet, Produces("application/json"), Route("/[controller]/[action]")]
         public CertificateInfoViewModel[] CertificateList()
         {
-            return _certificateProvider
+            return [.. certificateProvider
                 .GetCertificateNames()
-                .Select(m => new CertificateInfoViewModel(_certificateProvider.GetPublicCertificate(m)))
+                .Select(m => new CertificateInfoViewModel(certificateProvider.GetPublicCertificate(m)))
                 .OrderBy(m => m.Name.ToLower())
-                .ThenBy(m => m.Name)
-                .ToArray();
+                .ThenBy(m => m.Name)];
         }
 
         /// <summary>
@@ -67,7 +59,7 @@ namespace Gemini.Web.Controllers
             }
             try
             {
-                return Json(new CertificateInfoViewModel(_certificateProvider.UpdatePassword(id, currentPassword, newPassword)));
+                return Json(new CertificateInfoViewModel(certificateProvider.UpdatePassword(id, currentPassword, newPassword)));
             }
             catch (Exception ex)
             {
@@ -88,7 +80,7 @@ namespace Gemini.Web.Controllers
         {
             try
             {
-                return Json(new CertificateInfoViewModel(_certificateProvider.GetPublicCertificate(id)));
+                return Json(new CertificateInfoViewModel(certificateProvider.GetPublicCertificate(id)));
             }
             catch (FileNotFoundException ex)
             {
@@ -127,7 +119,7 @@ namespace Gemini.Web.Controllers
             var exp = expiration.ToLocalTime().ToUniversalTime().Date;
             try
             {
-                return Json(new CertificateInfoViewModel(_certificateProvider.CreateNew(displayName, password, exp)));
+                return Json(new CertificateInfoViewModel(certificateProvider.CreateNew(displayName, password, exp)));
             }
             catch (ArgumentException ex)
             {
@@ -170,7 +162,7 @@ namespace Gemini.Web.Controllers
             {
                 using var ms = new MemoryStream();
                 certificate.CopyToAsync(ms);
-                return Json(new CertificateInfoViewModel(_certificateProvider.Import(ms.ToArray(), password)));
+                return Json(new CertificateInfoViewModel(certificateProvider.Import(ms.ToArray(), password)));
             }
             catch (Exception ex)
             {
@@ -193,7 +185,7 @@ namespace Gemini.Web.Controllers
         {
             try
             {
-                return Json(_certificateProvider.DeleteCertificate(id));
+                return Json(certificateProvider.DeleteCertificate(id));
             }
             catch (Exception ex)
             {
@@ -224,7 +216,7 @@ namespace Gemini.Web.Controllers
             var exp = expiration.ToLocalTime().ToUniversalTime().Date;
             try
             {
-                return Json(new CertificateInfoViewModel(_certificateProvider.Update(id, displayName, password, exp)));
+                return Json(new CertificateInfoViewModel(certificateProvider.Update(id, displayName, password, exp)));
             }
             catch (ArgumentException ex)
             {
@@ -251,7 +243,7 @@ namespace Gemini.Web.Controllers
         {
             try
             {
-                return Ok(_certificateProvider.GetRawCertificate(id));
+                return Ok(certificateProvider.GetRawCertificate(id));
             }
             catch (FileNotFoundException ex)
             {

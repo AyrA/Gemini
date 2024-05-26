@@ -9,15 +9,8 @@ namespace Gemini.Web.Controllers
     /// Provides access to the server trust list
     /// </summary>
     [ApiController, Route("[controller]/[action]/{host}"), EnableCors("API")]
-    public class ServerTrustController : Controller
+    public class ServerTrustController(ServerIdentityService serverIdentityService) : Controller
     {
-        private readonly ServerIdentityService _serverIdentityService;
-
-        public ServerTrustController(ServerIdentityService serverIdentityService)
-        {
-            _serverIdentityService = serverIdentityService;
-        }
-
         /// <summary>
         /// Gets all trusted keys of all known hosts
         /// </summary>
@@ -25,7 +18,7 @@ namespace Gemini.Web.Controllers
         [HttpGet, Route("/[controller]/[action]")]
         public ServerIdentityModel[] TrustList()
         {
-            return _serverIdentityService.GetAll().OrderBy(m => m.Host).ToArray();
+            return [.. serverIdentityService.GetAll().OrderBy(m => m.Host)];
         }
 
         /// <summary>
@@ -40,9 +33,9 @@ namespace Gemini.Web.Controllers
             {
                 return BadRequest();
             }
-            var entries = _serverIdentityService
+            var entries = serverIdentityService
                 .GetAll()
-                .Where(m => m.Host == host.ToUpper())
+                .Where(m => m.Host.Equals(host, StringComparison.InvariantCultureIgnoreCase))
                 .SelectMany(m => m.PublicKeys)
                 .ToArray();
             return Json(entries);
@@ -68,7 +61,7 @@ namespace Gemini.Web.Controllers
             }
             try
             {
-                return Json(_serverIdentityService.AddServerTrust(host, cert));
+                return Json(serverIdentityService.AddServerTrust(host, cert));
             }
             catch (Exception ex)
             {
@@ -89,7 +82,7 @@ namespace Gemini.Web.Controllers
             {
                 return BadRequest("Missing or empty argument");
             }
-            return Json(_serverIdentityService.RemoveKey(host, id));
+            return Json(serverIdentityService.RemoveKey(host, id));
         }
 
         private static byte[]? B64(string data)

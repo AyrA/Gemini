@@ -6,7 +6,7 @@ namespace Gemini.Lib
     /// <summary>
     /// Provides Mime type translation
     /// </summary>
-    public class MimeType
+    public partial class MimeType
     {
         /// <summary>
         /// Name of the resource file
@@ -21,7 +21,7 @@ namespace Gemini.Lib
         /// <summary>
         /// Mime type map
         /// </summary>
-        private static readonly Dictionary<string, string> mimeMap = new();
+        private static readonly Dictionary<string, string> mimeMap = [];
 
         /// <summary>
         /// Initializes the mime type map
@@ -33,7 +33,7 @@ namespace Gemini.Lib
                 ?? throw new NotImplementedException($"Resource {ResName} was not found in assembly {a.FullName}");
             using var sr = new StreamReader(s);
             var lines = sr.ReadToEnd().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var r = new Regex(@"^(\S+)\s*(.+)$");
+            var r = MimeTypeMapper();
             foreach (var line in lines.Where(m => m[0] != '#'))
             {
                 var m = r.Match(line);
@@ -115,16 +115,23 @@ namespace Gemini.Lib
                 return "\"\"";
             }
 
-            if (Regex.IsMatch(value, @"[\x00-\x1F]"))
+            if (ControlCharacters().IsMatch(value))
             {
                 value = Uri.EscapeDataString(value);
             }
 
-            if (Regex.IsMatch(value, @"[\s;]"))
+            if (MimeValueEscapeFinder().IsMatch(value))
             {
                 return $"\"{value}\"";
             }
             return value;
         }
+
+        [GeneratedRegex(@"[\x00-\x1F]")]
+        private static partial Regex ControlCharacters();
+        [GeneratedRegex(@"[\s;]")]
+        private static partial Regex MimeValueEscapeFinder();
+        [GeneratedRegex(@"^(\S+)\s*(.+)$")]
+        private static partial Regex MimeTypeMapper();
     }
 }

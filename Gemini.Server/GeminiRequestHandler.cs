@@ -15,7 +15,7 @@ using System.Text.RegularExpressions;
 namespace Gemini.Server
 {
     [AutoDIRegister(AutoDIType.Transient)]
-    public class GeminiRequestHandler : IDisposable
+    public partial class GeminiRequestHandler : IDisposable
     {
         private static readonly Uri infoUrl = new("about:info");
         private readonly ILogger<GeminiRequestHandler> _logger;
@@ -72,11 +72,10 @@ namespace Gemini.Server
                 _logger.LogWarning("No hosts are active for this request handler. Terminating operations");
                 throw new Exception("No hosts are active for this request handler. Terminating operations");
             }
-            _hosts = hosts
+            _hosts = [.. hosts
                 .OrderBy(m => m.Priority)
                 .ThenBy(m => m.GetType().AssemblyQualifiedName)
-                .ThenBy(m => m.GetType().FullName)
-                .ToArray();
+                .ThenBy(m => m.GetType().FullName)];
         }
 
         [MemberNotNull(nameof(ServerCertificates))]
@@ -89,7 +88,13 @@ namespace Gemini.Server
         }
 
         public void TcpServerEventHandler(object sender, Socket client, IPEndPoint remoteAddress)
-            => HandleTcpConnection(client, remoteAddress);
+        {
+            ArgumentNullException.ThrowIfNull(sender);
+            ArgumentNullException.ThrowIfNull(client);
+            ArgumentNullException.ThrowIfNull(remoteAddress);
+
+            HandleTcpConnection(client, remoteAddress);
+        }
 
         public void HandleTcpConnection(Socket client, IPEndPoint remoteAddress)
         {
@@ -323,11 +328,11 @@ raw=n
             {
                 throw new ArgumentException($"'{nameof(url)}' cannot be null or whitespace.", nameof(url));
             }
-            if (!url.ToLower().StartsWith("gemini://"))
+            if (!url.StartsWith("gemini://", StringComparison.InvariantCultureIgnoreCase))
             {
                 throw new ArgumentException("Client sent non-gemini URL: " + url);
             }
-            if (Regex.IsMatch(url, @"[\x00-\x1F]"))
+            if (ControlCharacters().IsMatch(url))
             {
                 throw new ArgumentException($"URL contains unescaped control characters");
             }
@@ -345,5 +350,7 @@ raw=n
             return string.Join(" --> ", parts);
         }
 
+        [GeneratedRegex(@"[\x00-\x1F]")]
+        private static partial Regex ControlCharacters();
     }
 }

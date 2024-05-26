@@ -38,7 +38,7 @@ namespace Gemini.Web.Models
         /// <summary>
         /// Gets all extra mime attributes supplied by the mime type declaration
         /// </summary>
-        public Dictionary<string, string> ExtraInfo { get; } = new();
+        public Dictionary<string, string> ExtraInfo { get; } = [];
 
         public MimeInformation(ILogger logger, string mimeLine)
         {

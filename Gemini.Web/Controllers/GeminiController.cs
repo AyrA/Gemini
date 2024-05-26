@@ -12,18 +12,8 @@ using System.Text.RegularExpressions;
 namespace Gemini.Web.Controllers
 {
     [ApiController, Route("[controller]/[action]"), EnableCors("API")]
-    public class GeminiController : Controller
+    public partial class GeminiController(ILogger<GeminiController> logger, GeminiService geminiService, CertificateProviderService certificateService) : Controller
     {
-        private readonly ILogger<GeminiController> _logger;
-        private readonly GeminiService _geminiService;
-        private readonly CertificateProviderService _certificateService;
-
-        public GeminiController(ILogger<GeminiController> logger, GeminiService geminiService, CertificateProviderService certificateService)
-        {
-            _logger = logger;
-            _geminiService = geminiService;
-            _certificateService = certificateService;
-        }
 
         /// <summary>
         /// Retrieves a gemini resource
@@ -36,15 +26,15 @@ namespace Gemini.Web.Controllers
         public async Task<GeminiResponseModel> Navigate([FromForm] Uri url, [FromForm] string? certificate, [FromForm] string? password)
         {
             GeminiResponseModel? content;
-            _logger.LogInformation("API request for Navigate({url})", url);
+            logger.LogInformation("API request for Navigate({url})", url);
             try
             {
                 X509Certificate2? cert = null;
                 if (!string.IsNullOrEmpty(certificate))
                 {
-                    cert = _certificateService.GetCertificate(certificate, password).GetCertificate();
+                    cert = certificateService.GetCertificate(certificate, password).GetCertificate();
                 }
-                content = await _geminiService.GetContentAsync(url, cert);
+                content = await geminiService.GetContentAsync(url, cert);
             }
             catch (SslException ex)
             {
@@ -58,7 +48,7 @@ namespace Gemini.Web.Controllers
                     content = new GeminiResponseModel(GeminiResponseModel.InternalErrors.GenericError,
                         "PROTOCOL VIOLATION")
                     {
-                        Content = $"## Connection status:\r\n{_geminiService.CurrentState}\r\n" + CombineExceptionMessages(ex)
+                        Content = $"## Connection status:\r\n{geminiService.CurrentState}\r\n" + CombineExceptionMessages(ex)
                     };
                 }
             }
@@ -71,7 +61,7 @@ namespace Gemini.Web.Controllers
                 content = new GeminiResponseModel(GeminiResponseModel.InternalErrors.GenericError,
                     "PROTOCOL VIOLATION")
                 {
-                    Content = $"## Connection status:\r\n{_geminiService.CurrentState}\r\n" + CombineExceptionMessages(ex)
+                    Content = $"## Connection status:\r\n{geminiService.CurrentState}\r\n" + CombineExceptionMessages(ex)
                 };
             }
             return content;
@@ -92,15 +82,15 @@ namespace Gemini.Web.Controllers
         [HttpGet]
         public async Task<IActionResult> Get(Uri url, string? certificate, string? password)
         {
-            _logger.LogInformation("API request for Get({url})", url);
+            logger.LogInformation("API request for Get({url})", url);
             try
             {
                 X509Certificate2? cert = null;
                 if (!string.IsNullOrEmpty(certificate))
                 {
-                    cert = _certificateService.GetCertificate(certificate, password).GetCertificate();
+                    cert = certificateService.GetCertificate(certificate, password).GetCertificate();
                 }
-                var content = await _geminiService.GetContentAsync(url, cert);
+                var content = await geminiService.GetContentAsync(url, cert);
                 switch ((StatusCode)content.StatusCode)
                 {
                     case Enums.StatusCode.Input:
@@ -117,7 +107,7 @@ namespace Gemini.Web.Controllers
                                 await HttpContext.Response.Body.WriteAsync(Encoding.UTF8.GetBytes((string?)content.Content ?? string.Empty));
                                 return new EmptyResult();
                         }
-                        await HttpContext.Response.Body.WriteAsync((byte[]?)content.Content ?? Array.Empty<byte>());
+                        await HttpContext.Response.Body.WriteAsync((byte[]?)content.Content ?? []);
                         return new EmptyResult();
                     case Enums.StatusCode.TemporaryRedirect:
                     case Enums.StatusCode.PermanentRedirect:
@@ -216,7 +206,7 @@ namespace Gemini.Web.Controllers
 
         private static IEnumerable<string> GetCodeLinesFromStack(string? stack)
         {
-            var r = new Regex(@"at\s+(.+)\s+in\s+(.+):line\s+(\d+)");
+            var r = StackTraceParser();
             if (!string.IsNullOrWhiteSpace(stack))
             {
                 foreach (var line in stack.Split('\n').Select(m => r.Match(m.Trim())).Where(m => m.Success))
@@ -230,5 +220,8 @@ namespace Gemini.Web.Controllers
                 }
             }
         }
+
+        [GeneratedRegex(@"at\s+(.+)\s+in\s+(.+):line\s+(\d+)")]
+        private static partial Regex StackTraceParser();
     }
 }

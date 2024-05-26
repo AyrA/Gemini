@@ -36,16 +36,13 @@ namespace Gemini.Server
 
         public static void Install(string pathToZip)
         {
-            if (string.IsNullOrWhiteSpace(pathToZip))
-            {
-                throw new ArgumentException($"'{nameof(pathToZip)}' cannot be null or whitespace.", nameof(pathToZip));
-            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(pathToZip);
 
             using var fs = File.OpenRead(pathToZip);
             using var arc = new ZipArchive(fs, ZipArchiveMode.Read);
-            var infoEntry = arc.Entries.FirstOrDefault(m => m.FullName.ToLower() == "info.json")
+            var infoEntry = arc.Entries.FirstOrDefault(m => m.FullName.Equals("info.json", StringComparison.InvariantCultureIgnoreCase))
                 ?? throw new IOException("Unable to find info.json in the root of the zip archive");
-            var pluginEntry = arc.Entries.FirstOrDefault(m => m.FullName.ToLower() == "plugin.dll")
+            var pluginEntry = arc.Entries.FirstOrDefault(m => m.FullName.Equals("plugin.dll", StringComparison.InvariantCultureIgnoreCase))
                 ?? throw new IOException("Unable to find plugin.dll in the root of the zip archive");
             using var entryStream = infoEntry.Open();
             using var msInfo = new MemoryStream();
@@ -84,7 +81,7 @@ namespace Gemini.Server
                 //Plugin exists and is older. We can install over it.
                 try
                 {
-                    Uninstall(zipPluginInfo.Id.Value, zipPluginInfo.Preserve ?? Array.Empty<string>());
+                    Uninstall(zipPluginInfo.Id.Value, zipPluginInfo.Preserve ?? []);
                 }
                 catch (Exception ex)
                 {
@@ -119,7 +116,7 @@ namespace Gemini.Server
             Console.WriteLine("Plugin has been installed");
         }
 
-        public static void Uninstall(Guid pluginName) => Uninstall(pluginName, Array.Empty<string>());
+        public static void Uninstall(Guid pluginName) => Uninstall(pluginName, []);
 
         public static void Uninstall(Guid pluginName, string[] preserve)
         {

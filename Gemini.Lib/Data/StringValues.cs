@@ -7,7 +7,7 @@ namespace Gemini.Lib.Data
     /// </summary>
     public class StringValues : IEnumerable<string>
     {
-        private readonly List<string> strings = new();
+        private readonly List<string> strings = [];
 
         /// <summary>
         /// Gets the number of strings stored in this instance

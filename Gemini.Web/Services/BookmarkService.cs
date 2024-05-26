@@ -9,13 +9,13 @@ namespace Gemini.Web.Services
     [AutoDIRegister(AutoDIType.Transient)]
     public class BookmarkService : IEnumerable<BookmarkModel>
     {
-        private readonly Dictionary<Guid, BookmarkModel> _bookmarks = new();
+        private readonly Dictionary<Guid, BookmarkModel> _bookmarks = [];
         private readonly ILogger<BookmarkService> _logger;
         private readonly string _bookmarkFile;
 
-        public Guid[] Ids => _bookmarks.Keys.ToArray();
+        public Guid[] Ids => [.. _bookmarks.Keys];
 
-        public BookmarkModel[] Bookmarks => _bookmarks.Values.ToArray();
+        public BookmarkModel[] Bookmarks => [.. _bookmarks.Values];
 
         public BookmarkModel this[Guid id] => _bookmarks[id];
 
@@ -33,10 +33,7 @@ namespace Gemini.Web.Services
 
         public Guid Add(BookmarkModel model)
         {
-            if (model is null)
-            {
-                throw new ArgumentNullException(nameof(model));
-            }
+            ArgumentNullException.ThrowIfNull(model);
             model.Validate();
             var id = Guid.NewGuid();
             var copy = model.Clone();
@@ -55,10 +52,7 @@ namespace Gemini.Web.Services
 
         public void Update(Guid id, BookmarkModel model)
         {
-            if (model is null)
-            {
-                throw new ArgumentNullException(nameof(model));
-            }
+            ArgumentNullException.ThrowIfNull(model);
             model.Validate();
 
             lock (_bookmarks)

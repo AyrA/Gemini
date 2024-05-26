@@ -15,7 +15,7 @@ namespace Gemini.Web.Services
         public ServerIdentityService()
         {
             certSerialFile = Path.Combine(AppContext.BaseDirectory, "Cert", "server.id");
-            keys = new();
+            keys = [];
             Reload();
             if (Cleanup() > 0)
             {
@@ -49,7 +49,7 @@ namespace Gemini.Web.Services
                 if (File.Exists(certSerialFile))
                 {
                     var content = File.ReadAllText(certSerialFile);
-                    var json = JsonSerializer.Deserialize<List<ServerIdentityModel>>(content) ?? new();
+                    var json = JsonSerializer.Deserialize<List<ServerIdentityModel>>(content) ?? [];
                     keys.Clear();
                     foreach (var entry in json)
                     {
@@ -73,7 +73,7 @@ namespace Gemini.Web.Services
 
         public ServerIdentityModel[] GetAll()
         {
-            return keys.Values.ToArray();
+            return [.. keys.Values];
         }
 
         public bool RemoveKey(string host, string id)
@@ -110,10 +110,7 @@ namespace Gemini.Web.Services
                 throw new ArgumentException($"'{nameof(host)}' cannot be null or empty.", nameof(host));
             }
 
-            if (key is null)
-            {
-                throw new ArgumentNullException(nameof(key));
-            }
+            ArgumentNullException.ThrowIfNull(key);
             host = host.ToUpper();
             lock (keys)
             {
@@ -166,10 +163,7 @@ namespace Gemini.Web.Services
             {
                 return false;
             }
-            if (cert is null)
-            {
-                throw new ArgumentNullException(nameof(cert));
-            }
+            ArgumentNullException.ThrowIfNull(cert);
             var key = cert.GetPublicKey();
             return keys[host].PublicKeys.Any(m => m.Id == cert.GetCertHashString().ToUpper());
         }

@@ -32,14 +32,8 @@ namespace Gemini.Lib.Network
         /// <param name="upper">Upper address</param>
         public IpRange(IPAddress lower, IPAddress upper)
         {
-            if (lower is null)
-            {
-                throw new ArgumentNullException(nameof(lower));
-            }
-            if (upper is null)
-            {
-                throw new ArgumentNullException(nameof(upper));
-            }
+            ArgumentNullException.ThrowIfNull(lower);
+            ArgumentNullException.ThrowIfNull(upper);
             if (lower.AddressFamily != upper.AddressFamily)
             {
                 throw new ArgumentException("Address types do not match", nameof(upper));
@@ -111,10 +105,7 @@ namespace Gemini.Lib.Network
         /// </remarks>
         public int Compare(IPAddress addr)
         {
-            if (addr is null)
-            {
-                throw new ArgumentNullException(nameof(addr));
-            }
+            ArgumentNullException.ThrowIfNull(addr);
             byte[] bytes;
 
             //Convert v6 to v4 if possible
@@ -145,15 +136,9 @@ namespace Gemini.Lib.Network
         /// <returns>First encountered difference, or zero if none is found</returns>
         private static int Compare(byte[] a, byte[] b)
         {
-            if (a is null)
-            {
-                throw new ArgumentNullException(nameof(a));
-            }
+            ArgumentNullException.ThrowIfNull(a);
 
-            if (b is null)
-            {
-                throw new ArgumentNullException(nameof(b));
-            }
+            ArgumentNullException.ThrowIfNull(b);
             var l = b.Length - a.Length;
             for (var i = 0; i < Math.Min(a.Length, b.Length); i++)
             {

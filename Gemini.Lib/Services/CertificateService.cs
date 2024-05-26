@@ -10,8 +10,12 @@ namespace Gemini.Lib.Services
     /// <summary>
     /// Provides means to work with certificates
     /// </summary>
+    /// <remarks>
+    /// DI
+    /// </remarks>
+    /// <param name="logger">Logger instance</param>
     [AutoDIRegister(AutoDIType.Singleton)]
-    public class CertificateService
+    public partial class CertificateService(ILogger<CertificateService> logger)
     {
         /// <summary>
         /// Maximum name length as per X509
@@ -23,16 +27,6 @@ namespace Gemini.Lib.Services
         /// </summary>
         private static readonly PbeParameters encParams = new(
             PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000);
-        private readonly ILogger<CertificateService> _logger;
-
-        /// <summary>
-        /// DI
-        /// </summary>
-        /// <param name="logger">Logger instance</param>
-        public CertificateService(ILogger<CertificateService> logger)
-        {
-            _logger = logger;
-        }
 
         /// <summary>
         /// Checks if the given certificate time frame is valid
@@ -65,7 +59,7 @@ namespace Gemini.Lib.Services
             {
                 return false;
             }
-            return thumbprint.Length == 40 && Regex.IsMatch(thumbprint, @"^[\da-fA-F]+$");
+            return thumbprint.Length == 40 && HexMatcher().IsMatch(thumbprint);
         }
 
         /// <summary>
@@ -85,13 +79,13 @@ namespace Gemini.Lib.Services
         {
             if (certificate is null)
             {
-                _logger.LogError("Certificate argument was null");
+                logger.LogError("Certificate argument was null");
                 throw new ArgumentNullException(nameof(certificate));
             }
             bool encrypt = !string.IsNullOrEmpty(password);
             if (!encrypt)
             {
-                _logger.LogInformation("Exporting certificate {thumb} unencrypted", certificate.Thumbprint);
+                logger.LogInformation("Exporting certificate {thumb} unencrypted", certificate.Thumbprint);
             }
 
             using var sw = new StringWriter();
@@ -206,12 +200,9 @@ namespace Gemini.Lib.Services
             {
                 throw new ArgumentOutOfRangeException(nameof(validTo));
             }
-            if (existingKey is null)
-            {
-                throw new ArgumentNullException(nameof(existingKey));
-            }
+            ArgumentNullException.ThrowIfNull(existingKey);
 
-            _logger.LogInformation("Creating certificate {name} for range {from} --> {to}", name, validFrom, validTo);
+            logger.LogInformation("Creating certificate {name} for range {from} --> {to}", name, validFrom, validTo);
 
             var segments = new string[]
             {
@@ -233,7 +224,7 @@ namespace Gemini.Lib.Services
                 {
                     if (string.IsNullOrWhiteSpace(entry))
                     {
-                        _logger.LogWarning("SAN list has empty/whitespace entry. Skipping it");
+                        logger.LogWarning("SAN list has empty/whitespace entry. Skipping it");
                         continue;
                     }
                     else if (entry.StartsWith("*.") && Uri.CheckHostName(entry[2..]) == UriHostNameType.Dns)
@@ -268,7 +259,7 @@ namespace Gemini.Lib.Services
                     }
                     else
                     {
-                        _logger.LogWarning("No idea how to handle SAN name {name}. Skipping it.", entry);
+                        logger.LogWarning("No idea how to handle SAN name {name}. Skipping it.", entry);
                     }
                 }
                 //Don't add extensions if we skipped all entries
@@ -291,12 +282,12 @@ namespace Gemini.Lib.Services
         /// <returns>Certificate</returns>
         public X509Certificate2 ReadFromPemData(string pemData, string? password)
         {
-            _logger.LogDebug("Trying to decode pem data. Use password: {usepass}", !string.IsNullOrEmpty(password));
+            logger.LogDebug("Trying to decode pem data. Use password: {usepass}", !string.IsNullOrEmpty(password));
             if (pemData.Contains("ENCRYPTED PRIVATE KEY") || pemData.Contains("ENCRYPTED RSA PRIVATE KEY"))
             {
                 if (string.IsNullOrEmpty(password))
                 {
-                    _logger.LogError("PEM private key is encrypted but no password supplied");
+                    logger.LogError("PEM private key is encrypted but no password supplied");
                     throw new ArgumentException("Private key is encrypted but password is empty", nameof(password));
                 }
                 using var cert = X509Certificate2.CreateFromEncryptedPem(pemData, pemData, password);
@@ -304,7 +295,7 @@ namespace Gemini.Lib.Services
             }
             else if (!string.IsNullOrEmpty(password))
             {
-                _logger.LogError("PEM private key is not encrypted but a password was supplied");
+                logger.LogError("PEM private key is not encrypted but a password was supplied");
                 throw new ArgumentException("No encrypted private key was found, but password is specified", nameof(password));
             }
             else if (pemData.Contains("PRIVATE KEY"))
@@ -312,7 +303,7 @@ namespace Gemini.Lib.Services
                 using var cert = X509Certificate2.CreateFromPem(pemData, pemData);
                 return MakeExportable(cert);
             }
-            _logger.LogError("PEM is lacks private key");
+            logger.LogError("PEM is lacks private key");
             throw new FormatException("Certificate data lacks a private key");
         }
 
@@ -360,13 +351,13 @@ namespace Gemini.Lib.Services
                     if (cert.NotAfter.ToUniversalTime().AddTicks(-thirdDuration) >= DateTime.UtcNow)
                     {
                         created = false;
-                        _logger.LogInformation("Reusing existing developer certificate valid until {date}", cert.NotAfter.ToUniversalTime());
+                        logger.LogInformation("Reusing existing developer certificate valid until {date}", cert.NotAfter.ToUniversalTime());
                         return MakeExportable(cert);
                     }
-                    _logger.LogWarning("Developer certificate has expired or has less than 1/3 of its lifetime remaining. Creating a new certificate now");
+                    logger.LogWarning("Developer certificate has expired or has less than 1/3 of its lifetime remaining. Creating a new certificate now");
                 }
             }
-            _logger.LogInformation("Creating developer certificate valid for one year");
+            logger.LogInformation("Creating developer certificate valid for one year");
             var names = new string[] {
                 "localhost",
                 "*.localhost",
@@ -377,7 +368,7 @@ namespace Gemini.Lib.Services
             };
             using (cert = CreateCertificate("Gemini developer certificate", names, DateTime.Today.AddYears(1)))
             {
-                _logger.LogInformation("Exporting {name} to {file}", cert.Subject, certFile);
+                logger.LogInformation("Exporting {name} to {file}", cert.Subject, certFile);
                 File.WriteAllText(certFile, Export(cert));
                 created = true;
                 return MakeExportable(cert);
@@ -395,7 +386,7 @@ namespace Gemini.Lib.Services
         {
             if (!OperatingSystem.IsWindows())
             {
-                _logger.LogError("Tried to call {func} from non-windows platform", nameof(ReadFromStore));
+                logger.LogError("Tried to call {func} from non-windows platform", nameof(ReadFromStore));
                 throw new PlatformNotSupportedException("This function is only available on Windows");
             }
             if (!IsValidThumbprint(thumbprint))
@@ -403,7 +394,7 @@ namespace Gemini.Lib.Services
                 throw new ArgumentException("Invalid thumbprint value");
             }
             thumbprint = thumbprint.ToUpper();
-            _logger.LogInformation("Getting certificate {thumbprint} from store", thumbprint);
+            logger.LogInformation("Getting certificate {thumbprint} from store", thumbprint);
 
             var cert =
                 GetCert(thumbprint, StoreLocation.CurrentUser)
@@ -422,20 +413,20 @@ namespace Gemini.Lib.Services
         {
             using var store = new X509Store(StoreName.My, location);
             store.Open(OpenFlags.ReadOnly);
-            var cert = store.Certificates.FirstOrDefault(m => m.Thumbprint.ToUpper() == thumbprint.ToUpper());
+            var cert = store.Certificates.FirstOrDefault(m => m.Thumbprint.Equals(thumbprint, StringComparison.InvariantCultureIgnoreCase));
             store.Close();
             if (cert != null)
             {
                 if (!cert.HasPrivateKey)
                 {
-                    _logger.LogWarning("Certificate {thumbprint} found in store {store} but has no private key", thumbprint, location);
+                    logger.LogWarning("Certificate {thumbprint} found in store {store} but has no private key", thumbprint, location);
                     cert.Dispose();
                     return null;
                 }
-                _logger.LogInformation("Certificate {name} found in store {store}", cert.Subject, location);
+                logger.LogInformation("Certificate {name} found in store {store}", cert.Subject, location);
                 return cert;
             }
-            _logger.LogInformation("Certificate {thumbprint} not found in store {store}", thumbprint, location);
+            logger.LogInformation("Certificate {thumbprint} not found in store {store}", thumbprint, location);
             return null;
         }
 
@@ -451,10 +442,7 @@ namespace Gemini.Lib.Services
 
         private static AsymmetricAlgorithm MakeExportable(AsymmetricAlgorithm key)
         {
-            if (key is null)
-            {
-                throw new ArgumentNullException(nameof(key));
-            }
+            ArgumentNullException.ThrowIfNull(key);
 
             if (key is RSA rsaKey)
             {
@@ -514,6 +502,9 @@ namespace Gemini.Lib.Services
             var exportParams = tmp.ExportParameters(true);
             return ECDiffieHellman.Create(exportParams);
         }
+
+        [GeneratedRegex(@"^[\da-fA-F]+$")]
+        private static partial Regex HexMatcher();
 
         #endregion
     }

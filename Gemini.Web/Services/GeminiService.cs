@@ -9,7 +9,7 @@ using System.Text;
 namespace Gemini.Web.Services
 {
     [AutoDIRegister(AutoDIType.Transient)]
-    public class GeminiService
+    public class GeminiService(ILogger<GeminiService> logger, ServerIdentityService serverIdentity)
     {
         /// <summary>
         /// State of a gemini service instance
@@ -61,15 +61,6 @@ namespace Gemini.Web.Services
         /// </summary>
         public RequestState CurrentState { get; private set; } = RequestState.Idle;
 
-        private readonly ILogger<GeminiService> _logger;
-        private readonly ServerIdentityService _serverIdentity;
-
-        public GeminiService(ILogger<GeminiService> logger, ServerIdentityService serverIdentity)
-        {
-            _logger = logger;
-            _serverIdentity = serverIdentity;
-        }
-
         public Task<GeminiResponseModel> GetContentAsync(Uri url) => GetContentAsync(url, null);
 
         public async Task<GeminiResponseModel> GetContentAsync(Uri url, X509Certificate2? clientCertificate)
@@ -79,12 +70,12 @@ namespace Gemini.Web.Services
 
             if (clientCertificate != null && !clientCertificate.HasPrivateKey)
             {
-                _logger.LogError("Supplied client certificate '{subject}' lacks private key",
+                logger.LogError("Supplied client certificate '{subject}' lacks private key",
                     clientCertificate.Subject);
                 throw new ArgumentException("Supplied client certificate lacks private key");
             }
 
-            _logger.LogInformation("Requesting {url}", url);
+            logger.LogInformation("Requesting {url}", url);
             CurrentState = RequestState.Connecting;
 
             using var client = new TcpClient();
@@ -93,29 +84,29 @@ namespace Gemini.Web.Services
                 var delayTask = Task.Delay(5000);
                 if (delayTask == await Task.WhenAny(delayTask, client.ConnectAsync(host, port)))
                 {
-                    _logger.LogError("Server did not respond to our connection attempts within 5 seconds");
+                    logger.LogError("Server did not respond to our connection attempts within 5 seconds");
                     throw new TimeoutException("Server did not respond to our connection attempts within 5 seconds");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to connect to {url}", url);
+                logger.LogError(ex, "Failed to connect to {url}", url);
                 throw;
             }
-            _logger.LogInformation("Connected. Performing SSL handshake");
+            logger.LogInformation("Connected. Performing SSL handshake");
 
             bool RemoteCallback(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
             {
                 CurrentState = RequestState.CheckingServerCertificate;
-                _logger.LogInformation("Server cert validation result: {policy}", sslPolicyErrors);
+                logger.LogInformation("Server cert validation result: {policy}", sslPolicyErrors);
                 if (certificate == null)
                 {
-                    _logger.LogWarning("Server sent no certificate");
+                    logger.LogWarning("Server sent no certificate");
                     return false;
                 }
                 if (sslPolicyErrors != SslPolicyErrors.None)
                 {
-                    if (!_serverIdentity.CheckServerTrust($"{host}:{port}", certificate))
+                    if (!serverIdentity.CheckServerTrust($"{host}:{port}", certificate))
                     {
                         throw new UnknownCertificateException("Certificate is not in trust list",
                             new X509Certificate2(certificate.GetRawCertData()));
@@ -128,7 +119,7 @@ namespace Gemini.Web.Services
                 CurrentState = RequestState.ClientAuthentication;
                 if (clientCertificate != null)
                 {
-                    _logger.LogInformation("Performing client SSL authentication");
+                    logger.LogInformation("Performing client SSL authentication");
                 }
                 //Windows fix: we cannot use clientCertificate directly
                 return localCertificates[0];
@@ -137,11 +128,11 @@ namespace Gemini.Web.Services
             var hasCert = clientCertificate != null;
             using var ssl = new SslStream(client.GetStream(), false);
 
-            _logger.LogInformation("Performing SSL authentication for {host}", host);
+            logger.LogInformation("Performing SSL authentication for {host}", host);
             var opt = new SslClientAuthenticationOptions()
             {
                 TargetHost = host,
-                ApplicationProtocols = new() { new SslApplicationProtocol("GEMINI") },
+                ApplicationProtocols = [new SslApplicationProtocol("GEMINI")],
                 ClientCertificates = hasCert ? new X509CertificateCollection(new[] { clientCertificate! }) : null,
                 EncryptionPolicy = EncryptionPolicy.RequireEncryption,
                 LocalCertificateSelectionCallback = hasCert ? clientCertSelect : null,
@@ -152,7 +143,7 @@ namespace Gemini.Web.Services
                 await ssl.AuthenticateAsClientAsync(opt);
                 if (!ssl.IsAuthenticated)
                 {
-                    _logger.LogWarning("SSL authentication failed for {host}", host);
+                    logger.LogWarning("SSL authentication failed for {host}", host);
                     throw new SslException($"SSL authentication failed for {host}");
                 }
             }
@@ -162,7 +153,7 @@ namespace Gemini.Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SSL authentication failed: {msg}", ex.Message);
+                logger.LogError(ex, "SSL authentication failed: {msg}", ex.Message);
                 if (clientCertificate != null)
                 {
                     throw new SslException($"Failed to perform SSL authentication. Most likely cause is that your certificate '{clientCertificate.Subject}' was rejected by the server.", ex);
@@ -175,7 +166,7 @@ namespace Gemini.Web.Services
             CurrentState = RequestState.ReadingStatus;
             var status = GetStatusLine(ssl);
 
-            _logger.LogInformation("Status: {code}; Meta: {meta}", status.StatusCode, status.Meta);
+            logger.LogInformation("Status: {code}; Meta: {meta}", status.StatusCode, status.Meta);
 
             if (!status.IsSuccess)
             {
@@ -197,7 +188,7 @@ namespace Gemini.Web.Services
         private GeminiResponseModel GetStatusLine(Stream s)
         {
             var line = ReadLine(s, 2048);
-            return new GeminiResponseModel(_logger, line);
+            return new GeminiResponseModel(logger, line);
         }
 
         private static async Task<byte[]> ReadToEndAsync(Stream s)
@@ -209,10 +200,7 @@ namespace Gemini.Web.Services
 
         private string ReadLine(Stream s, int limit)
         {
-            if (limit <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(limit));
-            }
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
             var bytes = new List<byte>();
             while (bytes.Count < limit)
             {
@@ -233,7 +221,7 @@ namespace Gemini.Web.Services
             }
             if (bytes.Count >= limit)
             {
-                _logger.LogWarning("Attempted to read too many bytes (limit was {limit})", limit);
+                logger.LogWarning("Attempted to read too many bytes (limit was {limit})", limit);
             }
             return Encoding.UTF8.GetString(bytes.ToArray());
         }

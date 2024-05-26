@@ -13,17 +13,11 @@ using System.Text.Json.Serialization;
 namespace Gemini.Server
 {
     [AutoDIRegister(AutoDIType.Singleton)]
-    internal class Service : BackgroundService
+    internal class Service(ILogger<Service> logger, IServiceProvider provider, CertificateService certService, Tools tools, IHostApplicationLifetime lifetime) : BackgroundService
     {
         public static readonly string ConfigFile = Path.Combine(AppContext.BaseDirectory, "TCP.json");
-
-        private readonly ILogger<Service> _logger;
-        private readonly SemaphoreSlim _semaphore;
-        private readonly IServiceProvider _provider;
-        private readonly CertificateService _certService;
-        private readonly Tools _tools;
-        private readonly IHostApplicationLifetime _lifetime;
-        private readonly List<ListenerConfig> _servers = new();
+        private readonly SemaphoreSlim _semaphore = new(1);
+        private readonly List<ListenerConfig> _servers = [];
 
         private class ListenerConfig : IDisposable
         {
@@ -122,19 +116,9 @@ namespace Gemini.Server
             }
         }
 
-        public Service(ILogger<Service> logger, IServiceProvider provider, CertificateService certService, Tools tools, IHostApplicationLifetime lifetime)
-        {
-            _logger = logger;
-            _semaphore = new SemaphoreSlim(1);
-            _provider = provider;
-            _certService = certService;
-            _tools = tools;
-            _lifetime = lifetime;
-        }
-
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Starting service");
+            logger.LogInformation("Starting service");
 
             var configs = JsonSerializer.Deserialize<ListenerConfig[]>(File.ReadAllText(ConfigFile)) ??
                 throw new IOException($"Unable to deserialize {ConfigFile}");
@@ -142,7 +126,7 @@ namespace Gemini.Server
             {
                 throw new Exception("TCP configuration is empty");
             }
-            _logger.LogInformation("Found {count} listener configurations", configs.Length);
+            logger.LogInformation("Found {count} listener configurations", configs.Length);
             //Cleanup remnants of previous runs
             _servers.ForEach(server => server.Stop());
             _servers.Clear();
@@ -151,20 +135,20 @@ namespace Gemini.Server
                 try
                 {
                     config.Validate();
-                    _logger.LogInformation("Starting new listener on {ep}", config.Listen);
+                    logger.LogInformation("Starting new listener on {ep}", config.Listen);
                     try
                     {
-                        config.Handler = _provider.GetRequiredService<GeminiRequestHandler>();
+                        config.Handler = provider.GetRequiredService<GeminiRequestHandler>();
                     }
                     catch
                     {
-                        _logger.LogError("Failed to create request handler. The listener {ep} will not be created", config.Listen);
+                        logger.LogError("Failed to create request handler. The listener {ep} will not be created", config.Listen);
                         continue;
                     }
-                    config.CreateServer(_provider);
+                    config.CreateServer(provider);
                     if (config.ServerCertificates == null || config.ServerCertificates.Count == 0)
                     {
-                        _logger.LogWarning("No certificate file name or thumbprint specified. Using developer certificate");
+                        logger.LogWarning("No certificate file name or thumbprint specified. Using developer certificate");
                         config.Handler.UseDeveloperCertificate();
                     }
                     else
@@ -177,17 +161,17 @@ namespace Gemini.Server
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to start listener. Skipping this entry.");
+                    logger.LogError(ex, "Failed to start listener. Skipping this entry.");
                     config.Dispose();
                 }
             }
             if (_servers.Count == 0)
             {
-                _logger.LogCritical("All TCP listeners failed to start. This application will shut down now");
+                logger.LogCritical("All TCP listeners failed to start. This application will shut down now");
                 //This has to be delayed, otherwise weird crashes happen
                 return Task
                     .Delay(50, CancellationToken.None)
-                    .ContinueWith((t) => _lifetime.StopApplication(), CancellationToken.None);
+                    .ContinueWith((t) => lifetime.StopApplication(), CancellationToken.None);
             }
             try
             {
@@ -206,8 +190,8 @@ namespace Gemini.Server
             var ret = new Dictionary<string, X509Certificate2>();
             if (certs == null || certs.Count == 0)
             {
-                _logger.LogWarning("No certificate file name or thumbprint specified in listener for {endpoint}. Using temporary certificate", config.Listen);
-                ret.Add("*", _certService.CreateOrLoadDevCert());
+                logger.LogWarning("No certificate file name or thumbprint specified in listener for {endpoint}. Using temporary certificate", config.Listen);
+                ret.Add("*", certService.CreateOrLoadDevCert());
                 return ret;
             }
             foreach (var certInfo in certs)
@@ -215,15 +199,15 @@ namespace Gemini.Server
                 var relPath = Path.Combine(AppContext.BaseDirectory, certInfo.Value);
                 if (Path.IsPathFullyQualified(certInfo.Value))
                 {
-                    ret.Add(certInfo.Key.ToUpper(), _certService.ReadFromFile(certInfo.Value, null));
+                    ret.Add(certInfo.Key.ToUpper(), certService.ReadFromFile(certInfo.Value, null));
                 }
                 else if (File.Exists(relPath))
                 {
-                    ret.Add(certInfo.Key.ToUpper(), _certService.ReadFromFile(certInfo.Value, null));
+                    ret.Add(certInfo.Key.ToUpper(), certService.ReadFromFile(certInfo.Value, null));
                 }
                 else if (CertificateService.IsValidThumbprint(certInfo.Value))
                 {
-                    ret.Add(certInfo.Key.ToUpper(), _certService.ReadFromStore(certInfo.Value));
+                    ret.Add(certInfo.Key.ToUpper(), certService.ReadFromStore(certInfo.Value));
                 }
                 else
                 {
@@ -235,16 +219,16 @@ namespace Gemini.Server
 
         public override async Task StartAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Starting hosts");
+            logger.LogInformation("Starting hosts");
             //Consume the only available semaphore handle
             await _semaphore.WaitAsync(cancellationToken);
-            await _tools.StartHosts();
+            await tools.StartHosts();
             await base.StartAsync(cancellationToken);
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Service is shutting down");
+            logger.LogInformation("Service is shutting down");
             //Stop all listeners first
             foreach (var server in _servers)
             {
@@ -254,7 +238,7 @@ namespace Gemini.Server
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Server {listen} refused to stop", server.Listen);
+                    logger.LogError(ex, "Server {listen} refused to stop", server.Listen);
                 }
                 finally
                 {
@@ -262,7 +246,7 @@ namespace Gemini.Server
                 }
             }
             //Stop all hosts
-            await _tools.StopHosts();
+            await tools.StopHosts();
             //Permit restart
             _semaphore.Release();
             await base.StopAsync(cancellationToken);

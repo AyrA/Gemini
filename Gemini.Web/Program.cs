@@ -1,5 +1,6 @@
 using AyrA.AutoDI;
 using Microsoft.OpenApi.Models;
+using NReco.Logging.File;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);

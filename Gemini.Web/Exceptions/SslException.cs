@@ -1,6 +1,4 @@
-﻿using System.Runtime.Serialization;
-
-namespace Gemini.Web.Exceptions
+﻿namespace Gemini.Web.Exceptions
 {
     public class SslException : Exception
     {
@@ -13,10 +11,6 @@ namespace Gemini.Web.Exceptions
         }
 
         public SslException(string? message, Exception? innerException) : base(message, innerException)
-        {
-        }
-
-        protected SslException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

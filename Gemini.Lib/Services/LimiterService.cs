@@ -104,10 +104,7 @@ namespace Gemini.Lib.Services
         /// <param name="limit">Initial limit</param>
         public void Initialize(int limit)
         {
-            if (limit <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(limit));
-            }
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
             if (_semaphore != null)
             {
                 throw new InvalidOperationException("Upper limit has already been set");

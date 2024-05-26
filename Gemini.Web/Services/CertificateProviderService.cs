@@ -12,7 +12,7 @@ namespace Gemini.Web.Services
     [AutoDIRegister(AutoDIType.Scoped)]
     public class CertificateProviderService : IDisposable
     {
-        private readonly List<CertificateInfo> _issuedInstances = new();
+        private readonly List<CertificateInfo> _issuedInstances = [];
         private readonly string certDir;
         private readonly CertificateService _certService;
 
@@ -106,10 +106,7 @@ namespace Gemini.Web.Services
 
         public CertificateInfo Import(byte[] certificateData, string? password)
         {
-            if (certificateData is null)
-            {
-                throw new ArgumentNullException(nameof(certificateData));
-            }
+            ArgumentNullException.ThrowIfNull(certificateData);
 
             X509Certificate2? cert;
 

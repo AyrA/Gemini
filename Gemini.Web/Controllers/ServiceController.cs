@@ -4,14 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Gemini.Web.Controllers
 {
     [ApiController, Route("[controller]/[action]"), EnableCors("API")]
-    public class ServiceController
+    public class ServiceController(IHostApplicationLifetime applicationLifetime)
     {
-        private readonly IHostApplicationLifetime _applicationLifetime;
-
-        public ServiceController(IHostApplicationLifetime applicationLifetime)
-        {
-            _applicationLifetime = applicationLifetime;
-        }
 
         /// <summary>
         /// Shuts down the current application
@@ -25,7 +19,7 @@ namespace Gemini.Web.Controllers
         {
             Task.Delay(1000).ContinueWith(t =>
             {
-                _applicationLifetime.StopApplication();
+                applicationLifetime.StopApplication();
             });
             return true;
         }

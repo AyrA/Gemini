@@ -135,7 +135,7 @@ namespace Gemini.Lib
         /// </summary>
         public FileDataCollection()
         {
-            data = new();
+            data = [];
         }
 
         /// <summary>
@@ -144,10 +144,9 @@ namespace Gemini.Lib
         /// <param name="files">file data</param>
         public FileDataCollection(IEnumerable<FileData> files)
         {
-            data = files
+            data = [.. files
                 .Where(m => m != null)
-                .OrderBy(m => m.Index)
-                .ToList();
+                .OrderBy(m => m.Index)];
         }
 
         /// <summary>

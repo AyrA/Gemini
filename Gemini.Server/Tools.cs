@@ -6,19 +6,8 @@ using Microsoft.Extensions.Logging;
 namespace Gemini.Server
 {
     [AutoDIRegister(AutoDIType.Singleton)]
-    public class Tools
+    public class Tools(IServiceProvider provider, IServiceCollection collection, ILogger<Tools> logger)
     {
-        private readonly IServiceProvider _provider;
-        private readonly IServiceCollection _collection;
-        private readonly ILogger<Tools> _logger;
-
-        public Tools(IServiceProvider provider, IServiceCollection collection, ILogger<Tools> logger)
-        {
-            _provider = provider;
-            _collection = collection;
-            _logger = logger;
-        }
-
         public static bool IsGeminiHost(ServiceDescriptor descriptor)
         {
             return descriptor.ServiceType.IsSubclassOf(typeof(GeminiHost));
@@ -35,8 +24,8 @@ namespace Gemini.Server
 
         public async Task StartHosts()
         {
-            using var scope = _provider.CreateAsyncScope();
-            var hosts = GetHosts(_collection).Select(m => (GeminiHost)_provider.GetRequiredService(m));
+            using var scope = provider.CreateAsyncScope();
+            var hosts = GetHosts(collection).Select(m => (GeminiHost)provider.GetRequiredService(m));
             await Parallel.ForEachAsync(hosts, (host, token) =>
             {
                 try
@@ -45,7 +34,7 @@ namespace Gemini.Server
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Host {type} failed to start", host.GetType());
+                    logger.LogError(ex, "Host {type} failed to start", host.GetType());
                 }
                 return ValueTask.CompletedTask;
             });
@@ -53,8 +42,8 @@ namespace Gemini.Server
 
         public async Task StopHosts()
         {
-            using var scope = _provider.CreateAsyncScope();
-            var hosts = GetHosts(_collection).Select(m => (GeminiHost)_provider.GetRequiredService(m));
+            using var scope = provider.CreateAsyncScope();
+            var hosts = GetHosts(collection).Select(m => (GeminiHost)provider.GetRequiredService(m));
             await Parallel.ForEachAsync(hosts, (host, token) =>
             {
                 try
@@ -63,7 +52,7 @@ namespace Gemini.Server
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Host {type} failed to stop", host.GetType());
+                    logger.LogError(ex, "Host {type} failed to stop", host.GetType());
                 }
                 return ValueTask.CompletedTask;
             });

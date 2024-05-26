@@ -6,7 +6,7 @@ using System.Net.Sockets;
 namespace Gemini.Server.Network
 {
     [AutoDIRegister(AutoDIType.Transient)]
-    public class TcpServer : IDisposable
+    public class TcpServer(ILogger<TcpServer> logger) : IDisposable
     {
         public const int DefaultPort = 1965;
 
@@ -14,7 +14,7 @@ namespace Gemini.Server.Network
 
         public event ConnectionHandler Connection = delegate { };
 
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = logger;
         private readonly object _lock = new();
         private IPEndPoint? _bind;
         private TcpListener? _listener;
@@ -25,11 +25,6 @@ namespace Gemini.Server.Network
         public bool IsListening => _listening;
         public bool IsDisposed => _disposed;
         public IPEndPoint? LocalEndpoint => _bind == null ? null : new(_bind.Address, _bind.Port);
-
-        public TcpServer(ILogger<TcpServer> logger)
-        {
-            _logger = logger;
-        }
 
         public void Bind(IPEndPoint bind)
         {

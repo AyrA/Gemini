@@ -6,7 +6,7 @@ namespace Gemini.Lib.Data
     /// <summary>
     /// Represents the response to a gemini request
     /// </summary>
-    public class GeminiResponse : IDisposable
+    public partial class GeminiResponse : IDisposable
     {
         /// <summary>
         /// Default status line for success messages
@@ -117,7 +117,7 @@ namespace Gemini.Lib.Data
             if (Status != null)
             {
                 //Replace all control characters with spaces
-                Status = Regex.Replace(Status, @"[\x00-\x1F]+", " ");
+                Status = ControlCharacters().Replace(Status, " ");
             }
 
             if (code >= 20 && code <= 30)
@@ -301,5 +301,8 @@ namespace Gemini.Lib.Data
                 Status = status ?? StatusCode.ClientCertificateRequired.ToString()
             };
         }
+
+        [GeneratedRegex(@"[\x00-\x1F]+")]
+        private static partial Regex ControlCharacters();
     }
 }

@@ -25,8 +25,8 @@ namespace Gemini.Lib.Network
         /// <summary>
         /// Inverse of <see cref="maskMap"/>
         /// </summary>
-        private static readonly byte[] reverseMap = new byte[]
-        {
+        private static readonly byte[] reverseMap =
+        [
             0b00000000,
             0b10000000,
             0b11000000,
@@ -36,7 +36,7 @@ namespace Gemini.Lib.Network
             0b11111100,
             0b11111110,
             0b11111111,
-        };
+        ];
 
         private static readonly byte[][] v6Mask;
         private static readonly byte[][] v4Mask;
@@ -129,10 +129,7 @@ namespace Gemini.Lib.Network
         /// <returns>Lowest address after masking <paramref name="addr"/> with <paramref name="cidr"/></returns>
         public static IPAddress GetCidrLowerAddress(IPAddress addr, int cidr)
         {
-            if (addr is null)
-            {
-                throw new ArgumentNullException(nameof(addr));
-            }
+            ArgumentNullException.ThrowIfNull(addr);
             var bytes = (addr.IsIPv4MappedToIPv6 ? addr.MapToIPv4() : addr).GetAddressBytes();
             if (cidr < 0 || cidr > bytes.Length * 8)
             {
@@ -167,10 +164,7 @@ namespace Gemini.Lib.Network
         /// <returns>Highest address after masking <paramref name="addr"/> with <paramref name="cidr"/></returns>
         public static IPAddress GetCidrUpperAddress(IPAddress addr, int cidr)
         {
-            if (addr is null)
-            {
-                throw new ArgumentNullException(nameof(addr));
-            }
+            ArgumentNullException.ThrowIfNull(addr);
             var bytes = (addr.IsIPv4MappedToIPv6 ? addr.MapToIPv4() : addr).GetAddressBytes();
             if (cidr < 0 || cidr > bytes.Length * 8)
             {

@@ -5,7 +5,7 @@ namespace Gemini.Lib.Data
     /// <summary>
     /// Represents an uploaded file
     /// </summary>
-    public class FileData : IDisposable
+    public partial class FileData : IDisposable
     {
         private const int SizeLimit = 10000;
 
@@ -37,32 +37,21 @@ namespace Gemini.Lib.Data
         /// <param name="size">File size</param>
         public FileData(string fileName, uint index, ulong size)
         {
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                throw new ArgumentException($"'{nameof(fileName)}' cannot be null or whitespace.", nameof(fileName));
-            }
-
+            ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
             if (fileName.Trim() != fileName)
             {
                 throw new ArgumentException($"'{nameof(fileName)}' cannot begin or end in whitespace.", nameof(fileName));
             }
 
-            if (index < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(index));
-            }
-
-            if (size < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(size));
-            }
+            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            ArgumentOutOfRangeException.ThrowIfNegative(size);
 
             SanitizedName = fileName
                 .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Last()
                 .Trim();
             //Remove trailing whitespace and dots
-            SanitizedName = Regex.Replace(SanitizedName, @"[.\s]*$", "");
+            SanitizedName = InvalidFileNameEnds().Replace(SanitizedName, "");
             foreach (var c in Path.GetInvalidFileNameChars())
             {
                 SanitizedName = SanitizedName.Replace(c, '_');
@@ -174,5 +163,8 @@ namespace Gemini.Lib.Data
             }
             GC.SuppressFinalize(this);
         }
+
+        [GeneratedRegex(@"[.\s]*$")]
+        private static partial Regex InvalidFileNameEnds();
     }
 }

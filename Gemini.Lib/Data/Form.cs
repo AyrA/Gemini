@@ -57,7 +57,7 @@ namespace Gemini.Lib.Data
         /// </summary>
         public Form()
         {
-            _fields = new List<FormField>();
+            _fields = [];
         }
 
         /// <summary>
@@ -68,7 +68,7 @@ namespace Gemini.Lib.Data
         {
             if (fields == null)
             {
-                _fields = new();
+                _fields = [];
             }
             else
             {
@@ -209,10 +209,10 @@ namespace Gemini.Lib.Data
     /// </summary>
     public class FormField : IValidateabe
     {
-        private static readonly FieldType[] requiredOptions = new[]
-        {
+        private static readonly FieldType[] requiredOptions =
+        [
             FieldType.Checkbox, FieldType.Select, FieldType.Radio
-        };
+        ];
 
         /// <summary>
         /// The Name of the field.
@@ -273,7 +273,7 @@ namespace Gemini.Lib.Data
         /// If this is left empty, it results in unusable checkboxes, radio and select elements
         /// and therefore will fail validation for these field types.
         /// </remarks>
-        public Dictionary<string, string> Options { get; } = new();
+        public Dictionary<string, string> Options { get; } = [];
 
         /// <summary>
         /// The field type

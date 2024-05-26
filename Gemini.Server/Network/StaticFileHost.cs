@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 namespace Gemini.Server.Network
 {
     [AutoDIRegister(AutoDIType.Singleton)]
-    public class StaticFileHost : GeminiHost
+    public partial class StaticFileHost : GeminiHost
     {
         private class StaticFileHostJson
         {
@@ -20,11 +20,11 @@ namespace Gemini.Server.Network
             public StaticFileHostConfig[]? Hosts { get; set; }
         }
 
-        private class StaticFileHostConfig
+        private partial class StaticFileHostConfig
         {
-            private string[] _remoteRanges = Array.Empty<string>();
-            private string[] _hosts = Array.Empty<string>();
-            private string[] _thumbprints = Array.Empty<string>();
+            private string[] _remoteRanges = [];
+            private string[] _hosts = [];
+            private string[] _thumbprints = [];
 
             public string RootDirectory { get; set; } = string.Empty;
             public bool AllowDirectoryBrowsing { get; set; }
@@ -73,7 +73,7 @@ namespace Gemini.Server.Network
             }
 
             private bool isGlobal;
-            private IpRange[] ipRanges = Array.Empty<IpRange>();
+            private IpRange[] ipRanges = [];
 
             public void Validate()
             {
@@ -130,11 +130,11 @@ namespace Gemini.Server.Network
                     return true;
                 }
                 //IPv6 match
-                var match = Regex.Match(host, @"^\[(.+)\]:(\d+|\*)$");
+                var match = GenericIpv6Endpoint().Match(host);
                 if (!match.Success)
                 {
                     //Failed. Generic match
-                    match = Regex.Match(host, @"^(.+):(\d+|\*)$");
+                    match = GenericHostPortEndpoint().Match(host);
                 }
                 //Invalid
                 if (!match.Success)
@@ -190,7 +190,7 @@ namespace Gemini.Server.Network
                 {
                     return "*:*";
                 }
-                if (Regex.IsMatch(host, @"^\*:\d+$"))
+                if (AnyHostMatcher().IsMatch(host))
                 {
                     return host;
                 }
@@ -209,11 +209,11 @@ namespace Gemini.Server.Network
                 //At this point the host is invalid or has a port spec
 
                 //IPv6 match
-                var match = Regex.Match(host, @"^\[(.+)\]:(\d+|\*)$");
+                var match = GenericIpv6Endpoint().Match(host);
                 if (!match.Success)
                 {
                     //Failed. Generic match
-                    match = Regex.Match(host, @"^(.+):(\d+|\*)$");
+                    match = GenericHostPortEndpoint().Match(host);
                 }
                 //Invalid host. Return as-is
                 if (!match.Success)
@@ -229,6 +229,13 @@ namespace Gemini.Server.Network
 
                 return Normalize(host) + $":{port}";
             }
+
+            [GeneratedRegex(@"^\[(.+)\]:(\d+|\*)$")]
+            private static partial Regex GenericIpv6Endpoint();
+            [GeneratedRegex(@"^(.+):(\d+|\*)$")]
+            private static partial Regex GenericHostPortEndpoint();
+            [GeneratedRegex(@"^\*:\d+$")]
+            private static partial Regex AnyHostMatcher();
         }
 
         private StaticFileHostJson? _config;
@@ -296,7 +303,7 @@ namespace Gemini.Server.Network
                 var host = new StaticFileHostConfig()
                 {
                     RootDirectory = Path.Combine(AppContext.BaseDirectory, "StaticFileHost"),
-                    Hosts = new string[] { "*" },
+                    Hosts = ["*"],
                     AllowDirectoryBrowsing = false
                 };
                 _logger.LogWarning("Cannot find configuration: {file}. Creating a global listener for files in {path} instead", jsonFile, host.RootDirectory);
@@ -305,7 +312,7 @@ namespace Gemini.Server.Network
                 newConfig = new StaticFileHostJson()
                 {
                     Enabled = true,
-                    Hosts = new[] { host }
+                    Hosts = [host]
                 };
             }
             if (newConfig != null)
@@ -354,7 +361,7 @@ namespace Gemini.Server.Network
                 {
                     var di = new DirectoryInfo(p);
                     //Add trailing slash for directory URLs
-                    if (!url.LocalPath.EndsWith("/"))
+                    if (!url.LocalPath.EndsWith('/'))
                     {
                         return GeminiResponse.Redirect(url.LocalPath + "/");
                     }
@@ -422,10 +429,7 @@ namespace Gemini.Server.Network
             {
                 throw new ArgumentException($"'{nameof(host)}' cannot be null or whitespace.", nameof(host));
             }
-            if (configs == null)
-            {
-                throw new ArgumentNullException(nameof(configs));
-            }
+            ArgumentNullException.ThrowIfNull(configs);
 
             _logger.LogDebug("Getting config for {host}", host);
             if (configs.Length == 0)

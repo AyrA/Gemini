@@ -3,6 +3,6 @@
     public class ServerIdentityModel
     {
         public string Host { get; set; } = string.Empty;
-        public List<ServerIdentityKeyModel> PublicKeys { get; set; } = new();
+        public List<ServerIdentityKeyModel> PublicKeys { get; set; } = [];
     }
 }

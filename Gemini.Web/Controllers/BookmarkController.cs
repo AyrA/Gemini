@@ -7,14 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Gemini.Web.Controllers
 {
     [ApiController, Route("[controller]/[action]/{id}"), EnableCors("API")]
-    public class BookmarkController : Controller
+    public class BookmarkController(BookmarkService bookmarks) : Controller
     {
-        private readonly BookmarkService _bookmarks;
-
-        public BookmarkController(BookmarkService bookmarks)
-        {
-            _bookmarks = bookmarks;
-        }
 
         /// <summary>
         /// Lists all bookmarks
@@ -23,7 +17,7 @@ namespace Gemini.Web.Controllers
         [HttpGet, Produces("application/json"), Route("/[controller]/[action]")]
         public BookmarkViewModel[] List()
         {
-            return _bookmarks.Ids.Select(m => new BookmarkViewModel(m, _bookmarks[m])).ToArray();
+            return bookmarks.Ids.Select(m => new BookmarkViewModel(m, bookmarks[m])).ToArray();
         }
 
         /// <summary>
@@ -36,7 +30,7 @@ namespace Gemini.Web.Controllers
         {
             try
             {
-                return Json(_bookmarks[id]);
+                return Json(bookmarks[id]);
             }
             catch (KeyNotFoundException)
             {
@@ -59,15 +53,15 @@ namespace Gemini.Web.Controllers
             BookmarkModel model;
             try
             {
-                model = _bookmarks[id];
+                model = bookmarks[id];
             }
             catch
             {
                 return NotFound(id);
             }
-            if (_bookmarks.Delete(id))
+            if (bookmarks.Delete(id))
             {
-                _bookmarks.Save();
+                bookmarks.Save();
                 return Json(model);
             }
             return NotFound();
@@ -87,8 +81,8 @@ namespace Gemini.Web.Controllers
         {
             try
             {
-                var id = _bookmarks.Add(new BookmarkModel(name, url));
-                _bookmarks.Save();
+                var id = bookmarks.Add(new BookmarkModel(name, url));
+                bookmarks.Save();
                 return Json(id);
             }
             catch (ValidationException ex)
@@ -114,8 +108,8 @@ namespace Gemini.Web.Controllers
             try
             {
                 var bm = new BookmarkModel(name, url);
-                _bookmarks.Update(id, bm);
-                _bookmarks.Save();
+                bookmarks.Update(id, bm);
+                bookmarks.Save();
                 return Json(bm);
             }
             catch (KeyNotFoundException)
